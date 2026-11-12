@@ -1,0 +1,64 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  build-ipa:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Prebuild Native iOS Project
+        run: npx expo prebuild --platform ios --clean
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install
+
+      - name: Build Unsigned iOS Archive
+        run: |
+          WORKSPACE_NAME=$(ls ios | grep .xcworkspace | head -n 1)
+          SCHEME_NAME=${WORKSPACE_NAME%.*}
+          echo "Building Scheme: $SCHEME_NAME with Workspace: $WORKSPACE_NAME"
+          
+          xcodebuild archive \
+            -workspace "ios/$WORKSPACE_NAME" \
+            -scheme "$SCHEME_NAME" \
+            -sdk iphoneos \
+            -configuration Release \
+            -archivePath "$PWD/build/app.xcarchive" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_IDENTITY="" \
+            CODE_SIGN_STYLE=Manual
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          APP_NAME=$(ls "$PWD/build/app.xcarchive/Products/Applications/")
+          echo "Found compiled app: $APP_NAME"
+          cp -r "$PWD/build/app.xcarchive/Products/Applications/$APP_NAME" Payload/
+          zip -r "SoundWave.ipa" Payload
+          mkdir -p output
+          mv "SoundWave.ipa" output/
+
+      - name: Upload IPA for Sideloadly
+        uses: actions/upload-artifact@v4
+        with:
+          name: SoundWave-iOS-IPA
+          path: output/SoundWave.ipa
+          retention-days: 7

@@ -160,7 +160,7 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
       <WebView
         key={currentVideoId}
         ref={webViewRef}
-        source={{ uri: embedUrl }}
+        source={{ uri: embedUrl, headers: { Referer: 'https://www.youtube.com' } }}
         injectedJavaScript={INJECTED_JS}
         onMessage={handleMessage}
         allowsInlineMediaPlayback={true}

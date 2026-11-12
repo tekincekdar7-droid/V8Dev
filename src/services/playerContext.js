@@ -215,7 +215,7 @@ export function PlayerProvider({ children }) {
       } else {
         // 1. Try verified high-performance Native Stream (instant, lock-screen, background, crystal clear audio)
         try {
-          const streamData = await getAudioStreamUrl(track.id);
+          const streamData = await getAudioStreamUrl(track);
           if (streamData && streamData.streamUrl) {
             console.log('[Audio] Verified Native Stream found! Starting AVPlayer:', track.title);
             startNativePlayer(streamData.streamUrl, track);

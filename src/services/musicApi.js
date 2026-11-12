@@ -184,9 +184,8 @@ export async function searchMusic(query) {
   return fallbackMatches;
 }
 
-export async function getAudioStreamUrl(videoId) {
-  if (!videoId) throw new Error('Video ID is required');
-
+async function tryResolveDirectStream(videoId) {
+  if (!videoId) return null;
   for (const baseUrl of INVIDIOUS_INSTANCES) {
     try {
       const controller = new AbortController();
@@ -205,7 +204,6 @@ export async function getAudioStreamUrl(videoId) {
       );
       const selected = audioFormats.find(f => f.audioQuality === 'AUDIO_QUALITY_MEDIUM') || audioFormats[0];
       if (selected && selected.url) {
-        // Quick 1-second verification probe to ensure 200/206 and not 403
         try {
           const testCtrl = new AbortController();
           const testTimeout = setTimeout(() => testCtrl.abort(), 1200);
@@ -228,6 +226,69 @@ export async function getAudioStreamUrl(videoId) {
       }
     } catch (e) {}
   }
+  return null;
+}
+
+async function searchStreamFallback(title, artist) {
+  if (!title) return null;
+  const query = `${title} ${artist || ''} audio`;
+  try {
+    const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 3000);
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+      }
+    });
+    clearTimeout(to);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+    if (!match) return null;
+    const json = JSON.parse(match[1]);
+    const contents = json?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ||
+                     json?.contents?.sectionListRenderer?.contents;
+    const items = contents?.[0]?.itemSectionRenderer?.contents || [];
+
+    const candidates = [];
+    for (const it of items) {
+      const vr = it.videoRenderer;
+      if (vr && vr.videoId && vr.videoId.length === 11) {
+        candidates.push(vr.videoId);
+        if (candidates.length >= 4) break;
+      }
+    }
+
+    for (const candId of candidates) {
+      const stream = await tryResolveDirectStream(candId);
+      if (stream) {
+        return stream;
+      }
+    }
+  } catch (err) {}
+  return null;
+}
+
+export async function getAudioStreamUrl(target) {
+  const videoId = typeof target === 'string' ? target : target?.id;
+  const title = typeof target === 'object' ? target?.title : null;
+  const artist = typeof target === 'object' ? target?.artist : null;
+
+  // 1. Try direct resolution on the specific videoId first
+  if (videoId) {
+    const direct = await tryResolveDirectStream(videoId);
+    if (direct) return direct;
+  }
+
+  // 2. If direct resolution failed or was 403, try live search fallback for this track
+  if (title) {
+    const fallback = await searchStreamFallback(title, artist);
+    if (fallback) return fallback;
+  }
+
   throw new Error('No playable direct stream available');
 }
 
@@ -336,12 +397,12 @@ export const QUICK_PICKS_TRACKS = [
     views: '120M dinlenme'
   },
   {
-    id: '4NRXx6U8ABQ',
+    id: '8E0GXu9d0tk',
     title: 'Blinding Lights',
     artist: 'The Weeknd',
     duration: 200,
     durationFormatted: '3:20',
-    thumbnail: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/8E0GXu9d0tk/hqdefault.jpg',
     rank: 2,
     views: '4.2Milyar dinlenme'
   },
@@ -356,32 +417,32 @@ export const QUICK_PICKS_TRACKS = [
     views: '1.1Milyar dinlenme'
   },
   {
-    id: '5NV6Rdv1a3I',
+    id: '5glDAaCaazc',
     title: 'Get Lucky',
     artist: 'Daft Punk ft. Pharrell',
     duration: 248,
     durationFormatted: '4:08',
-    thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/5glDAaCaazc/hqdefault.jpg',
     rank: 4,
     views: '890M dinlenme'
   },
   {
-    id: 'XbGs_qK2PQA',
+    id: 'xFYQQPAOz7Y',
     title: 'Lose Yourself',
     artist: 'Eminem',
     duration: 326,
     durationFormatted: '5:26',
-    thumbnail: 'https://i.ytimg.com/vi/XbGs_qK2PQA/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/xFYQQPAOz7Y/hqdefault.jpg',
     rank: 5,
     views: '1.5Milyar dinlenme'
   },
   {
-    id: 'i04G45D6zoc',
+    id: 'VREnTCTeS4k',
     title: 'Aşkın Olayım',
     artist: 'Simge',
     duration: 254,
     durationFormatted: '4:14',
-    thumbnail: 'https://i.ytimg.com/vi/i04G45D6zoc/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/VREnTCTeS4k/hqdefault.jpg',
     rank: 6,
     views: '210M dinlenme'
   }
@@ -408,12 +469,12 @@ export const LISTEN_AGAIN_TRACKS = [
     badge: 'Rock Efsane'
   },
   {
-    id: '7wtfhZwyrcc',
+    id: 'W0DM5lcj6mw',
     title: 'Believer',
     artist: 'Imagine Dragons',
     duration: 204,
     durationFormatted: '3:24',
-    thumbnail: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/W0DM5lcj6mw/hqdefault.jpg',
     badge: 'Enerji'
   },
   {
@@ -426,21 +487,21 @@ export const LISTEN_AGAIN_TRACKS = [
     badge: 'Hit'
   },
   {
-    id: 'fJ9rUzIMcZQ',
+    id: 'vbvyNnw8Qjg',
     title: 'Bohemian Rhapsody',
     artist: 'Queen',
     duration: 359,
     durationFormatted: '5:59',
-    thumbnail: 'https://i.ytimg.com/vi/fJ9rUzIMcZQ/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/vbvyNnw8Qjg/hqdefault.jpg',
     badge: 'Klasik'
   },
   {
-    id: 'hT_nvWreIhg',
+    id: 'mgT0N3tMP74',
     title: 'Counting Stars',
     artist: 'OneRepublic',
     duration: 257,
     durationFormatted: '4:17',
-    thumbnail: 'https://i.ytimg.com/vi/hT_nvWreIhg/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/mgT0N3tMP74/hqdefault.jpg',
     badge: 'Pop Rock'
   }
 ];
@@ -448,12 +509,12 @@ export const LISTEN_AGAIN_TRACKS = [
 // 5. "Yeni Çıkanlar & Trendler" (New & Trending Widescreen Carousel)
 export const NEW_RELEASES_TRACKS = [
   {
-    id: 'DkWkX3P0w-0',
+    id: 'Q3cj3lVCxr0',
     title: 'Yana Yana',
     artist: 'Semicenk & Reynmen',
     duration: 182,
     durationFormatted: '3:02',
-    thumbnail: 'https://i.ytimg.com/vi/DkWkX3P0w-0/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/Q3cj3lVCxr0/hqdefault.jpg',
     badge: '🔥 Trend #1'
   },
   {
@@ -466,21 +527,21 @@ export const NEW_RELEASES_TRACKS = [
     badge: '🔥 Zirvede'
   },
   {
-    id: 'cfi8gBd-VaM',
+    id: 'SCZgGVqVsbY',
     title: 'Dudu',
     artist: 'Tarkan',
     duration: 275,
     durationFormatted: '4:35',
-    thumbnail: 'https://i.ytimg.com/vi/cfi8gBd-VaM/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/SCZgGVqVsbY/hqdefault.jpg',
     badge: 'Efsane'
   },
   {
-    id: 'OPf0YbXqDm0',
+    id: 'W8FUmkw3a4U',
     title: 'Uptown Funk',
     artist: 'Mark Ronson ft. Bruno Mars',
     duration: 270,
     durationFormatted: '4:30',
-    thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/W8FUmkw3a4U/hqdefault.jpg',
     badge: 'Parti'
   },
   {
@@ -516,22 +577,22 @@ export const INSTANT_TRENDING_TRACKS = [
     views: '120M dinlenme'
   },
   {
-    id: '4NRXx6U8ABQ',
+    id: '8E0GXu9d0tk',
     title: 'Blinding Lights',
     artist: 'The Weeknd',
     duration: 200,
     durationFormatted: '3:20',
-    thumbnail: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/8E0GXu9d0tk/hqdefault.jpg',
     rank: 2,
     views: '4.2Milyar dinlenme'
   },
   {
-    id: 'i04G45D6zoc',
+    id: 'VREnTCTeS4k',
     title: 'Aşkın Olayım',
     artist: 'Simge',
     duration: 254,
     durationFormatted: '4:14',
-    thumbnail: 'https://i.ytimg.com/vi/i04G45D6zoc/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/VREnTCTeS4k/hqdefault.jpg',
     rank: 3,
     views: '210M dinlenme'
   },
@@ -556,32 +617,32 @@ export const INSTANT_TRENDING_TRACKS = [
     views: '180M dinlenme'
   },
   {
-    id: '5NV6Rdv1a3I',
+    id: '5glDAaCaazc',
     title: 'Get Lucky',
     artist: 'Daft Punk ft. Pharrell',
     duration: 248,
     durationFormatted: '4:08',
-    thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/5glDAaCaazc/hqdefault.jpg',
     rank: 6,
     views: '890M dinlenme'
   },
   {
-    id: 'XbGs_qK2PQA',
+    id: 'xFYQQPAOz7Y',
     title: 'Lose Yourself',
     artist: 'Eminem',
     duration: 326,
     durationFormatted: '5:26',
-    thumbnail: 'https://i.ytimg.com/vi/XbGs_qK2PQA/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/xFYQQPAOz7Y/hqdefault.jpg',
     rank: 7,
     views: '1.5Milyar dinlenme'
   },
   {
-    id: 'DkWkX3P0w-0',
+    id: 'Q3cj3lVCxr0',
     title: 'Yana Yana',
     artist: 'Semicenk & Reynmen',
     duration: 182,
     durationFormatted: '3:02',
-    thumbnail: 'https://i.ytimg.com/vi/DkWkX3P0w-0/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/Q3cj3lVCxr0/hqdefault.jpg',
     rank: 8,
     views: '165M dinlenme'
   },
@@ -596,12 +657,12 @@ export const INSTANT_TRENDING_TRACKS = [
     views: '2.4Milyar dinlenme'
   },
   {
-    id: '7wtfhZwyrcc',
+    id: 'W0DM5lcj6mw',
     title: 'Believer',
     artist: 'Imagine Dragons',
     duration: 204,
     durationFormatted: '3:24',
-    thumbnail: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/W0DM5lcj6mw/hqdefault.jpg',
     rank: 10,
     views: '2.6Milyar dinlenme'
   }
@@ -614,35 +675,35 @@ export const THEMATIC_SECTIONS = {
     subtitle: 'EN ÇOK DİNLENEN YERLİ HİTLER',
     tracks: [
       { id: 'cpp69ghR1IM', title: 'Şımarık (Kiss Kiss)', artist: 'Tarkan', duration: 191, durationFormatted: '3:11', thumbnail: 'https://i.ytimg.com/vi/cpp69ghR1IM/hqdefault.jpg', badge: 'Efsane' },
-      { id: 'i04G45D6zoc', title: 'Aşkın Olayım', artist: 'Simge', duration: 254, durationFormatted: '4:14', thumbnail: 'https://i.ytimg.com/vi/i04G45D6zoc/hqdefault.jpg', badge: 'Zirvede' },
+      { id: 'VREnTCTeS4k', title: 'Aşkın Olayım', artist: 'Simge', duration: 254, durationFormatted: '4:14', thumbnail: 'https://i.ytimg.com/vi/VREnTCTeS4k/hqdefault.jpg', badge: 'Zirvede' },
       { id: 'yJg-Y5byMMw', title: 'Antidepresan', artist: 'Mabel Matiz & Mert Demir', duration: 215, durationFormatted: '3:35', thumbnail: 'https://i.ytimg.com/vi/yJg-Y5byMMw/hqdefault.jpg', badge: 'Hit' },
-      { id: 'DkWkX3P0w-0', title: 'Yana Yana', artist: 'Semicenk & Reynmen', duration: 182, durationFormatted: '3:02', thumbnail: 'https://i.ytimg.com/vi/DkWkX3P0w-0/hqdefault.jpg', badge: 'Trend #1' },
+      { id: 'Q3cj3lVCxr0', title: 'Yana Yana', artist: 'Semicenk & Reynmen', duration: 182, durationFormatted: '3:02', thumbnail: 'https://i.ytimg.com/vi/Q3cj3lVCxr0/hqdefault.jpg', badge: 'Trend #1' },
       { id: 'NAHRpEqgcL4', title: 'Kuzu Kuzu', artist: 'Tarkan', duration: 234, durationFormatted: '3:54', thumbnail: 'https://i.ytimg.com/vi/NAHRpEqgcL4/hqdefault.jpg', badge: 'Klasik' },
-      { id: 'cfi8gBd-VaM', title: 'Dudu', artist: 'Tarkan', duration: 275, durationFormatted: '4:35', thumbnail: 'https://i.ytimg.com/vi/cfi8gBd-VaM/hqdefault.jpg', badge: 'Popüler' },
-      { id: 'WcIcVapfqXw', title: 'Baksana Talihe', artist: 'Göksel', duration: 202, durationFormatted: '3:22', thumbnail: 'https://i.ytimg.com/vi/WcIcVapfqXw/hqdefault.jpg', badge: 'Nostalji' }
+      { id: 'SCZgGVqVsbY', title: 'Dudu', artist: 'Tarkan', duration: 275, durationFormatted: '4:35', thumbnail: 'https://i.ytimg.com/vi/SCZgGVqVsbY/hqdefault.jpg', badge: 'Popüler' },
+      { id: '-A9cVnlHa9A', title: 'Baksana Talihe', artist: 'Göksel', duration: 202, durationFormatted: '3:22', thumbnail: 'https://i.ytimg.com/vi/-A9cVnlHa9A/hqdefault.jpg', badge: 'Nostalji' }
     ]
   },
   globalHits: {
     title: 'Global Billboard Hits',
     subtitle: 'DÜNYANIN EN ÇOK DİNLENENLERİ',
     tracks: [
-      { id: '4NRXx6U8ABQ', title: 'Blinding Lights', artist: 'The Weeknd', duration: 200, durationFormatted: '3:20', thumbnail: 'https://i.ytimg.com/vi/4NRXx6U8ABQ/hqdefault.jpg', badge: '#1 Global' },
+      { id: '8E0GXu9d0tk', title: 'Blinding Lights', artist: 'The Weeknd', duration: 200, durationFormatted: '3:20', thumbnail: 'https://i.ytimg.com/vi/8E0GXu9d0tk/hqdefault.jpg', badge: '#1 Global' },
       { id: 'JGwWNGJdvx8', title: 'Shape of You', artist: 'Ed Sheeran', duration: 233, durationFormatted: '3:53', thumbnail: 'https://i.ytimg.com/vi/JGwWNGJdvx8/hqdefault.jpg', badge: '6Milyar+' },
-      { id: 'OPf0YbXqDm0', title: 'Uptown Funk', artist: 'Bruno Mars', duration: 270, durationFormatted: '4:30', thumbnail: 'https://i.ytimg.com/vi/OPf0YbXqDm0/hqdefault.jpg', badge: 'Dans' },
-      { id: '5NV6Rdv1a3I', title: 'Get Lucky', artist: 'Daft Punk', duration: 248, durationFormatted: '4:08', thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg', badge: 'Elektronik' },
-      { id: '7wtfhZwyrcc', title: 'Believer', artist: 'Imagine Dragons', duration: 204, durationFormatted: '3:24', thumbnail: 'https://i.ytimg.com/vi/7wtfhZwyrcc/hqdefault.jpg', badge: 'Güç' },
+      { id: 'W8FUmkw3a4U', title: 'Uptown Funk', artist: 'Bruno Mars', duration: 270, durationFormatted: '4:30', thumbnail: 'https://i.ytimg.com/vi/W8FUmkw3a4U/hqdefault.jpg', badge: 'Dans' },
+      { id: '5glDAaCaazc', title: 'Get Lucky', artist: 'Daft Punk', duration: 248, durationFormatted: '4:08', thumbnail: 'https://i.ytimg.com/vi/5glDAaCaazc/hqdefault.jpg', badge: 'Elektronik' },
+      { id: 'W0DM5lcj6mw', title: 'Believer', artist: 'Imagine Dragons', duration: 204, durationFormatted: '3:24', thumbnail: 'https://i.ytimg.com/vi/W0DM5lcj6mw/hqdefault.jpg', badge: 'Güç' },
       { id: 'yKNxeF4KMsY', title: 'Yellow', artist: 'Coldplay', duration: 269, durationFormatted: '4:29', thumbnail: 'https://i.ytimg.com/vi/yKNxeF4KMsY/hqdefault.jpg', badge: 'Klasik' },
-      { id: 'hT_nvWreIhg', title: 'Counting Stars', artist: 'OneRepublic', duration: 257, durationFormatted: '4:17', thumbnail: 'https://i.ytimg.com/vi/hT_nvWreIhg/hqdefault.jpg', badge: 'Pop' }
+      { id: 'mgT0N3tMP74', title: 'Counting Stars', artist: 'OneRepublic', duration: 257, durationFormatted: '4:17', thumbnail: 'https://i.ytimg.com/vi/mgT0N3tMP74/hqdefault.jpg', badge: 'Pop' }
     ]
   },
   rapTrap: {
     title: 'Türkçe Rap & Sokak',
     subtitle: 'AĞIR BASSLAR VE HIZLI FLOWLAR',
     tracks: [
-      { id: 'XbGs_qK2PQA', title: 'Lose Yourself', artist: 'Eminem', duration: 326, durationFormatted: '5:26', thumbnail: 'https://i.ytimg.com/vi/XbGs_qK2PQA/hqdefault.jpg', badge: 'Efsane' },
-      { id: 'uelHwf8o7_U', title: 'Love The Way You Lie', artist: 'Eminem ft. Rihanna', duration: 266, durationFormatted: '4:26', thumbnail: 'https://i.ytimg.com/vi/uelHwf8o7_U/hqdefault.jpg', badge: 'Zirve' },
-      { id: 'r8w2rRz7_k8', title: '10MG', artist: 'Motive', duration: 174, durationFormatted: '2:54', thumbnail: 'https://i.ytimg.com/vi/r8w2rRz7_k8/hqdefault.jpg', badge: 'Trend' },
-      { id: 'n3rP99oG5_E', title: 'Cindy', artist: 'UZI', duration: 198, durationFormatted: '3:18', thumbnail: 'https://i.ytimg.com/vi/n3rP99oG5_E/hqdefault.jpg', badge: 'Trap' },
+      { id: 'xFYQQPAOz7Y', title: 'Lose Yourself', artist: 'Eminem', duration: 326, durationFormatted: '5:26', thumbnail: 'https://i.ytimg.com/vi/xFYQQPAOz7Y/hqdefault.jpg', badge: 'Efsane' },
+      { id: 'UoyohtqRmKY', title: 'Love The Way You Lie', artist: 'Eminem ft. Rihanna', duration: 266, durationFormatted: '4:26', thumbnail: 'https://i.ytimg.com/vi/UoyohtqRmKY/hqdefault.jpg', badge: 'Zirve' },
+      { id: '2RAbPC9aKQ0', title: '10MG', artist: 'Motive', duration: 174, durationFormatted: '2:54', thumbnail: 'https://i.ytimg.com/vi/2RAbPC9aKQ0/hqdefault.jpg', badge: 'Trend' },
+      { id: '1cdxsrRC9Qw', title: 'Cindy', artist: 'UZI', duration: 198, durationFormatted: '3:18', thumbnail: 'https://i.ytimg.com/vi/1cdxsrRC9Qw/hqdefault.jpg', badge: 'Trap' },
       { id: 'RgKAFK5djSk', title: 'See You Again', artist: 'Wiz Khalifa', duration: 237, durationFormatted: '3:57', thumbnail: 'https://i.ytimg.com/vi/RgKAFK5djSk/hqdefault.jpg', badge: 'Hit' },
       { id: 'kXYiU_JCYtU', title: 'In The End', artist: 'Linkin Park', duration: 216, durationFormatted: '3:36', thumbnail: 'https://i.ytimg.com/vi/kXYiU_JCYtU/hqdefault.jpg', badge: 'Kült' }
     ]

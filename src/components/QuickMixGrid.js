@@ -37,14 +37,14 @@ const SHORTCUTS = [
   {
     id: 's5',
     title: 'Süper Karışık',
-    thumbnail: 'https://i.ytimg.com/vi/5NV6Rdv1a3I/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/5glDAaCaazc/hqdefault.jpg',
     color: '#FF9100',
     getTracks: () => ALL_CATALOG_TRACKS.slice(0, 10),
   },
   {
     id: 's6',
     title: 'Aşkın Olayım Mix',
-    thumbnail: 'https://i.ytimg.com/vi/i04G45D6zoc/hqdefault.jpg',
+    thumbnail: 'https://i.ytimg.com/vi/VREnTCTeS4k/hqdefault.jpg',
     color: '#E040FB',
     getTracks: () => THEMATIC_SECTIONS.turkishPop.tracks,
   },

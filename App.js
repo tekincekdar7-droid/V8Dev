@@ -72,11 +72,12 @@ function MainScreen() {
   const [mostPlayed, setMostPlayed] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [exploreFilter, setExploreFilter] = useState('all'); // 'all' | 'most_played'
+  const [homeTopFilter, setHomeTopFilter] = useState('user'); // 'user' | 'global'
   const [loading, setLoading] = useState(false);
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
   const [soundModeModalOpen, setSoundModeModalOpen] = useState(false);
 
-  const { playTrack } = usePlayer();
+  const { playTrack, currentTrack } = usePlayer();
   const greeting = getDynamicGreeting();
 
   useEffect(() => {
@@ -84,14 +85,12 @@ function MainScreen() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'explore') {
-      getMostPlayedTracks(10).then(data => {
-        if (data && data.length > 0) {
-          setMostPlayed(data);
-        }
-      });
-    }
-  }, [activeTab]);
+    getMostPlayedTracks(10).then(data => {
+      if (data && data.length > 0) {
+        setMostPlayed(data);
+      }
+    });
+  }, [activeTab, currentTrack]);
 
   const loadHomeData = async () => {
     try {
@@ -176,6 +175,10 @@ function MainScreen() {
     handleSearch(categoryQuery);
   };
 
+  const displayedTopTracks = (homeTopFilter === 'user' && mostPlayed.length > 0)
+    ? mostPlayed.slice(0, 6)
+    : topCharts.slice(0, 6);
+
   return (
     <SafeAreaView style={styles.safeContainer}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
@@ -243,8 +246,62 @@ function MainScreen() {
             {/* 4. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
             <QuickMixGrid />
 
-            {/* 5. Öne Çıkan Şarkılar (Hızlı Seçimler - 4 Şarkı) */}
-            <View style={styles.sectionHeaderRow}>
+            {/* 5. 🔥 EN ÇOK DİNLENENLER DERLEMESİ (ANA SAYFA ÖZEL) */}
+            <View style={styles.topPlayedCompiledSection}>
+              <View style={styles.sectionHeaderRow}>
+                <View>
+                  <Text style={styles.sectionSubtitle}>ZİRVEDEKİLER & TREND</Text>
+                  <Text style={styles.sectionTitle}>🔥 En Çok Dinlenenler</Text>
+                </View>
+
+                {/* Switch between user's most played & global top */}
+                <View style={styles.miniPillToggle}>
+                  <TouchableOpacity
+                    style={[styles.miniToggleBtn, homeTopFilter === 'user' && styles.activeMiniToggleBtn]}
+                    onPress={() => setHomeTopFilter('user')}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.miniToggleText, homeTopFilter === 'user' && styles.activeMiniToggleText]}>
+                      Senin ({mostPlayed.length})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.miniToggleBtn, homeTopFilter === 'global' && styles.activeMiniToggleBtn]}
+                    onPress={() => setHomeTopFilter('global')}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={[styles.miniToggleText, homeTopFilter === 'global' && styles.activeMiniToggleText]}>
+                      Top Liste
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {displayedTopTracks.length > 0 ? (
+                <View style={styles.trackList}>
+                  {displayedTopTracks.map((track, idx) => (
+                    <TrackCard
+                      key={`home-top-${track.id}-${idx}`}
+                      rank={idx + 1}
+                      track={track}
+                      onSelect={(t) => playTrack(t, displayedTopTracks)}
+                    />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyTopPlayedCard}>
+                  <Ionicons name="flame-outline" size={26} color="#FF9500" />
+                  <Text style={styles.emptyTopPlayedTitle}>Henüz Şarkı Çalmadın</Text>
+                  <Text style={styles.emptyTopPlayedSubtitle}>
+                    Müzik dinledikçe en çok dinlediğin şarkılar otomatik burada derlenecek!
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* 6. Günün Parçaları (Hızlı Seçimler) */}
+            <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
               <View>
                 <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
                 <Text style={styles.sectionTitle}>Günün Parçaları</Text>
@@ -269,30 +326,11 @@ function MainScreen() {
               ))}
             </View>
 
-            {/* 6. Öne Çıkan Listeler & Mixler */}
+            {/* 7. Öne Çıkan Listeler & Mixler */}
             <PlaylistsCarousel onSelectMix={handleMixSelect} />
 
-            {/* 7. Popüler Sanatçılar */}
+            {/* 8. Popüler Sanatçılar */}
             <ArtistsRow onSelectArtist={handleArtistSelect} />
-
-            {/* 8. Top 5 Zirvedekiler (Sade ve Kompakt Liste) */}
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <Text style={styles.sectionSubtitle}>LİSTE BAŞI</Text>
-                <Text style={styles.sectionTitle}>En Çok Dinlenen Top 5</Text>
-              </View>
-            </View>
-
-            <View style={styles.trackList}>
-              {topCharts.map((track, idx) => (
-                <TopChartRankItem
-                  key={track.id}
-                  rank={idx + 1}
-                  track={track}
-                  onSelect={(t) => playTrack(t, topCharts)}
-                />
-              ))}
-            </View>
 
             <View style={{ height: 130 }} />
           </ScrollView>
@@ -801,6 +839,59 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '500',
+  },
+  topPlayedCompiledSection: {
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  miniPillToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderRadius: 20,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  miniToggleBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 18,
+  },
+  activeMiniToggleBtn: {
+    backgroundColor: '#FF0000',
+  },
+  miniToggleText: {
+    color: '#8E8E93',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  activeMiniToggleText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  emptyTopPlayedCard: {
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  emptyTopPlayedTitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  emptyTopPlayedSubtitle: {
+    color: '#77777D',
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 4,
+    lineHeight: 16,
   },
   bottomNavDock: {
     flexDirection: 'row',

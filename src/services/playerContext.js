@@ -151,16 +151,12 @@ export function PlayerProvider({ children }) {
       setIsPlaying(true);
       setIsLoading(false);
     } else if (state === 'paused') {
+      setIsLoading(false);
       if (isUserPausedRef.current) {
         setIsPlaying(false);
-        setIsLoading(false);
       } else {
-        // WebKit auto-paused; resume immediately!
-        console.log('[PlayerContext] Auto-pause detected, re-triggering play');
         ytEngineRef.current?.play();
       }
-    } else if (state === 'buffering') {
-      setIsLoading(true);
     } else if (state === 'ended') {
       skipToNext();
     }
@@ -169,6 +165,8 @@ export function PlayerProvider({ children }) {
   const handleEngineTimeUpdate = ({ currentTime, duration }) => {
     if (currentTime !== undefined) {
       setPlaybackPosition(currentTime * 1000);
+      setIsLoading(false);
+      setIsPlaying(true);
     }
     if (duration && duration > 0) {
       setPlaybackDuration(duration * 1000);

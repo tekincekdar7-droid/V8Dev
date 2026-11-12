@@ -7,6 +7,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import YouTubeAudioEngine from '../components/YouTubeAudioEngine';
 import { downloadTrack, isTrackDownloaded } from './downloadManager';
 import { isFavorite, toggleFavorite } from './favoritesManager';
+import { recordTrackPlay } from './historyManager';
 import { getAudioStreamUrl } from './musicApi';
 
 const PlayerContext = createContext(null);
@@ -179,14 +180,19 @@ export function PlayerProvider({ children }) {
   };
 
   const playTrack = async (track, newQueue = null) => {
-    if (!track) return;
+    if (!track || !track.id) return;
 
-    if (newQueue) {
+    // 1. Record play in history for "En Çok Dinlediklerin"
+    recordTrackPlay(track).catch(() => {});
+
+    // 2. Set queue
+    if (newQueue && newQueue.length > 0) {
       setQueue(newQueue);
       const idx = newQueue.findIndex(t => t.id === track.id);
       setCurrentIndex(idx !== -1 ? idx : 0);
     }
 
+    // 3. Reset states & set current track immediately
     isUserPausedRef.current = false;
     setCurrentTrack(track);
     setPlaybackPosition(0);
@@ -196,32 +202,17 @@ export function PlayerProvider({ children }) {
 
     try {
       if (track.localAudioUri) {
-        // 1. Play downloaded offline track via native expo-audio
+        // Play downloaded offline track via native expo-audio
         startNativePlayer(track.localAudioUri, track);
       } else {
-        // 2. Play online music: First try high-performance native audio stream
-        try {
-          const streamData = await getAudioStreamUrl(track.id);
-          if (streamData && streamData.streamUrl) {
-            console.log('[Audio] Direct stream obtained! Playing natively:', track.title);
-            startNativePlayer(streamData.streamUrl, track);
-            return;
-          }
-        } catch (streamErr) {
-          console.warn('[Audio] Direct stream not available, falling back to YouTube engine:', streamErr.message);
-        }
-
-        // 3. Fallback to YouTube engine
-        console.log('[Audio] Fallback to YouTube player for:', track.title);
+        // Direct instant online playback via YouTube engine (zero 20s delays!)
         cleanupLocalPlayer();
         setActiveEngine('youtube');
         setIsPlaying(true);
-        setIsLoading(false);
       }
     } catch (err) {
       console.error('[Audio] Failed to play track:', err);
       setIsLoading(false);
-      Alert.alert('Şarkı Çalınamadı', err.message || 'Müzik akışına ulaşılamadı. Lütfen tekrar deneyin.');
     }
   };
 

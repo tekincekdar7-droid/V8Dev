@@ -70,6 +70,7 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
   return (
     <View style={styles.hiddenContainer} pointerEvents="none">
       <YoutubePlayer
+        key={currentVideoId}
         ref={playerRef}
         height={50}
         width={50}
@@ -87,6 +88,7 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
           allowsInlineMediaPlayback: true,
           mediaPlaybackRequiresUserAction: false,
           allowsAirPlayForMediaPlayback: true,
+          androidLayerType: 'hardware',
         }}
       />
     </View>

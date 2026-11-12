@@ -1,34 +1,17 @@
-// musicApi.js - Global ad-free music search, audio stream & rich curated feeds
-const INVIDIOUS_BASE_URL = 'https://yt.chocolatemoo53.com';
+// musicApi.js - Live YouTube Music search, instant stream resolution & curated feeds
+const INVIDIOUS_INSTANCES = [
+  'https://yt.chocolatemoo53.com',
+  'https://inv.vern.cc',
+  'https://invidious.jing.rocks'
+];
 
-async function fetchWithRetry(path, retries = 2) {
-  for (let attempt = 0; attempt < retries; attempt++) {
-    const url = `${INVIDIOUS_BASE_URL}${path}`;
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000);
-
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent': 'SoundWaveMusic/1.0'
-        }
-      });
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      if (attempt === retries - 1) {
-        throw err;
-      }
-    }
-  }
+export function parseDurationToSeconds(durationStr) {
+  if (!durationStr || typeof durationStr !== 'string') return 0;
+  const parts = durationStr.split(':').map(p => parseInt(p, 10));
+  if (parts.some(isNaN)) return 0;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return parts[0] || 0;
 }
 
 export function formatDuration(seconds) {
@@ -38,80 +21,201 @@ export function formatDuration(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-export async function searchMusic(query) {
-  if (!query || !query.trim()) return [];
+// 1. Direct Live YouTube Web Search (Real-time YouTube index, zero delays)
+async function searchDirectYouTube(query) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+  const encoded = encodeURIComponent(query.trim());
+  const url = `https://www.youtube.com/results?search_query=${encoded}`;
+
+  const response = await fetch(url, {
+    signal: controller.signal,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept-Language': 'tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7',
+    }
+  });
+  clearTimeout(timeoutId);
+
+  if (!response.ok) throw new Error(`YouTube HTTP ${response.status}`);
+  const html = await response.text();
+
+  const match = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+  if (!match) throw new Error('ytInitialData pattern not found');
+
+  const json = JSON.parse(match[1]);
+  const sections = json?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents ||
+                   json?.contents?.sectionListRenderer?.contents;
+  if (!Array.isArray(sections)) throw new Error('No sectionListRenderer in search data');
+
+  const tracks = [];
+  for (const section of sections) {
+    const items = section?.itemSectionRenderer?.contents;
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        const v = item?.videoRenderer;
+        if (v && v.videoId) {
+          const rawTitle = v.title?.runs?.[0]?.text || v.title?.simpleText || 'Şarkı';
+          const author = v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || 'Sanatçı';
+          const durationStr = v.lengthText?.simpleText || '3:30';
+          const viewCount = v.viewCountText?.simpleText || v.shortViewCountText?.simpleText || '';
+
+          // Clean up titles nicely
+          let cleanTitle = rawTitle.replace(/(\(|\[)(Official|Audio|Video|Clip|HQ|HD|4K|Lyrics|Klip|Netd|Orijinal).+?(\)|\])/gi, '').trim();
+          if (!cleanTitle) cleanTitle = rawTitle;
+
+          tracks.push({
+            id: v.videoId,
+            title: cleanTitle,
+            rawTitle: rawTitle,
+            artist: author,
+            duration: parseDurationToSeconds(durationStr),
+            durationFormatted: durationStr,
+            thumbnail: `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`,
+            viewCountText: viewCount,
+          });
+        }
+      }
+    }
+  }
+
+  if (tracks.length === 0) throw new Error('No video items found in YouTube response');
+  return tracks;
+}
+
+// 2. Invidious API Search Fallback
+async function searchInvidious(query) {
+  const encoded = encodeURIComponent(query.trim());
+  let lastErr = null;
+
+  for (const baseUrl of INVIDIOUS_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const res = await fetch(`${baseUrl}/api/v1/search?q=${encoded}&type=video`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'SoundWaveMusic/1.0'
+        }
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) continue;
+
+      return data
+        .filter(item => item && item.type === 'video' && item.videoId)
+        .map(item => {
+          let cleanTitle = item.title || 'Bilinmeyen Şarkı';
+          cleanTitle = cleanTitle.replace(/(\(|\[)(Official|Audio|Video|Clip|HQ|HD|4K|Lyrics|Klip).+?(\)|\])/gi, '').trim();
+          return {
+            id: item.videoId,
+            title: cleanTitle || item.title,
+            rawTitle: item.title,
+            artist: item.author || 'Bilinmeyen Sanatçı',
+            duration: item.lengthSeconds || 0,
+            durationFormatted: formatDuration(item.lengthSeconds),
+            thumbnail: `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`,
+            viewCountText: item.viewCountText || ''
+          };
+        });
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('All Invidious instances failed');
+}
+
+// Live YouTube Auto-complete suggestions
+export async function getSearchSuggestions(query) {
+  if (!query || query.trim().length < 2) return [];
   try {
     const encoded = encodeURIComponent(query.trim());
-    const data = await fetchWithRetry(`/api/v1/search?q=${encoded}&type=video`);
-
-    if (!Array.isArray(data)) return [];
-
-    return data
-      .filter(item => item && item.type === 'video' && item.videoId)
-      .map(item => {
-        let thumbnail = '';
-        if (item.videoThumbnails && item.videoThumbnails.length > 0) {
-          const medium = item.videoThumbnails.find(t => t.quality === 'medium' || t.quality === 'high');
-          thumbnail = medium ? medium.url : item.videoThumbnails[0].url;
-        } else {
-          thumbnail = `https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`;
-        }
-
-        let cleanTitle = item.title || 'Bilinmeyen Şarkı';
-        cleanTitle = cleanTitle.replace(/(\(|\[)(Official|Audio|Video|Clip|HQ|HD|4K|Lyrics).+?(\)|\])/gi, '').trim();
-
-        return {
-          id: item.videoId,
-          title: cleanTitle || item.title,
-          artist: item.author || 'Bilinmeyen Sanatçı',
-          duration: item.lengthSeconds || 0,
-          durationFormatted: formatDuration(item.lengthSeconds),
-          thumbnail: thumbnail,
-          viewCountText: item.viewCountText || ''
-        };
-      });
-  } catch (err) {
-    console.warn('[MusicApi] searchMusic warning:', err.message);
-    const lower = query.toLowerCase();
-    const fallbackMatches = ALL_CATALOG_TRACKS.filter(t =>
-      t.title.toLowerCase().includes(lower) || t.artist.toLowerCase().includes(lower)
-    );
-    return fallbackMatches.length > 0 ? fallbackMatches : ALL_CATALOG_TRACKS.slice(0, 15);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const res = await fetch(`https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encoded}`, {
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data[1]) ? data[1].slice(0, 6) : [];
+  } catch (e) {
+    return [];
   }
+}
+
+// Master Search Function (Live YouTube Real-Time Racing)
+export async function searchMusic(query) {
+  if (!query || !query.trim()) return [];
+
+  // Race direct YouTube & Invidious for max reliability & sub-second speed
+  try {
+    const results = await Promise.any([
+      searchDirectYouTube(query),
+      searchInvidious(query)
+    ]);
+    if (Array.isArray(results) && results.length > 0) {
+      return results;
+    }
+  } catch (err) {
+    console.warn('[MusicApi] Live search race warning:', err);
+  }
+
+  // Secondary single attempt if race rejected
+  try {
+    const directResults = await searchDirectYouTube(query);
+    if (directResults && directResults.length > 0) return directResults;
+  } catch (e) {}
+
+  try {
+    const invResults = await searchInvidious(query);
+    if (invResults && invResults.length > 0) return invResults;
+  } catch (e) {}
+
+  // Last-resort catalog filter only if offline/network failure
+  const lower = query.toLowerCase();
+  const fallbackMatches = ALL_CATALOG_TRACKS.filter(t =>
+    t.title.toLowerCase().includes(lower) || t.artist.toLowerCase().includes(lower)
+  );
+  return fallbackMatches;
 }
 
 export async function getAudioStreamUrl(videoId) {
   if (!videoId) throw new Error('Video ID is required');
 
-  const data = await fetchWithRetry(`/api/v1/videos/${videoId}`);
+  for (const baseUrl of INVIDIOUS_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`${baseUrl}/api/v1/videos/${videoId}`, {
+        signal: controller.signal,
+        headers: { 'Accept': 'application/json' }
+      });
+      clearTimeout(timeoutId);
+      if (!res.ok) continue;
+      const data = await res.json();
 
-  if (!data || !data.adaptiveFormats) {
-    throw new Error('No formats found for this video');
+      if (!data || !data.adaptiveFormats) continue;
+      const audioFormats = data.adaptiveFormats.filter(
+        f => f.type && (f.type.startsWith('audio/mp4') || f.container === 'm4a')
+      );
+      const selected = audioFormats.find(f => f.audioQuality === 'AUDIO_QUALITY_MEDIUM') || audioFormats[0];
+      if (selected && selected.url) {
+        return {
+          streamUrl: selected.url,
+          container: selected.container || 'm4a',
+          bitrate: selected.bitrate,
+          title: data.title,
+          artist: data.author,
+          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+        };
+      }
+    } catch (e) {}
   }
-
-  const audioFormats = data.adaptiveFormats.filter(
-    f => f.type && (f.type.startsWith('audio/mp4') || f.container === 'm4a')
-  );
-
-  let selectedFormat = null;
-  if (audioFormats.length > 0) {
-    selectedFormat = audioFormats.find(f => f.audioQuality === 'AUDIO_QUALITY_MEDIUM') || audioFormats[0];
-  } else {
-    selectedFormat = data.adaptiveFormats.find(f => f.type && f.type.startsWith('audio/'));
-  }
-
-  if (!selectedFormat || !selectedFormat.url) {
-    throw new Error('No playable audio stream available');
-  }
-
-  return {
-    streamUrl: selectedFormat.url,
-    container: selectedFormat.container || 'm4a',
-    bitrate: selectedFormat.bitrate,
-    title: data.title,
-    artist: data.author,
-    thumbnail: (data.videoThumbnails && data.videoThumbnails[0]?.url) || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-  };
+  throw new Error('No playable direct stream available');
 }
 
 // 1. Popular Artists with Avatars (YouTube Music Style)

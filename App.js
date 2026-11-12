@@ -17,11 +17,13 @@ import { PlayerProvider, usePlayer } from './src/services/playerContext';
 import {
   searchMusic,
   getTrendingMusic,
+  getSearchSuggestions,
   INSTANT_TRENDING_TRACKS,
   QUICK_PICKS_TRACKS,
   ALL_CATALOG_TRACKS,
   THEMATIC_SECTIONS
 } from './src/services/musicApi';
+import { getMostPlayedTracks } from './src/services/historyManager';
 import TrackCard from './src/components/TrackCard';
 import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
@@ -67,6 +69,9 @@ function MainScreen() {
   const [results, setResults] = useState(ALL_CATALOG_TRACKS);
   const [quickPicks, setQuickPicks] = useState(QUICK_PICKS_TRACKS.slice(0, 4));
   const [topCharts, setTopCharts] = useState(INSTANT_TRENDING_TRACKS.slice(0, 5));
+  const [mostPlayed, setMostPlayed] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [exploreFilter, setExploreFilter] = useState('all'); // 'all' | 'most_played'
   const [loading, setLoading] = useState(false);
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
   const [soundModeModalOpen, setSoundModeModalOpen] = useState(false);
@@ -77,6 +82,16 @@ function MainScreen() {
   useEffect(() => {
     loadHomeData();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'explore') {
+      getMostPlayedTracks(10).then(data => {
+        if (data && data.length > 0) {
+          setMostPlayed(data);
+        }
+      });
+    }
+  }, [activeTab]);
 
   const loadHomeData = async () => {
     try {
@@ -106,8 +121,20 @@ function MainScreen() {
     }
   };
 
+  const handleQueryChange = (text) => {
+    setQuery(text);
+    if (text.trim().length >= 2) {
+      getSearchSuggestions(text).then(data => {
+        if (Array.isArray(data)) setSuggestions(data);
+      });
+    } else {
+      setSuggestions([]);
+    }
+  };
+
   const handleSearch = async (searchTerm) => {
     const term = searchTerm !== undefined ? searchTerm : query;
+    setSuggestions([]);
     if (!term.trim()) {
       setResults(ALL_CATALOG_TRACKS);
       return;
@@ -116,13 +143,19 @@ function MainScreen() {
     Keyboard.dismiss();
     try {
       const data = await searchMusic(term);
-      setResults(data && data.length > 0 ? data : ALL_CATALOG_TRACKS);
+      setResults(data && data.length > 0 ? data : []);
     } catch (e) {
       console.warn('Search failed:', e);
-      setResults(ALL_CATALOG_TRACKS);
+      setResults([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSelectSuggestion = (s) => {
+    setQuery(s);
+    setSuggestions([]);
+    handleSearch(s);
   };
 
   const handleArtistSelect = (artistQuery) => {
@@ -264,17 +297,17 @@ function MainScreen() {
             <View style={{ height: 130 }} />
           </ScrollView>
         ) : activeTab === 'explore' ? (
-          /* ==================== EXPLORE TAB (CLEAN & INTUITIVE) ==================== */
+          /* ==================== EXPLORE TAB (RICH SEARCH & MOST PLAYED) ==================== */
           <ScrollView style={styles.tabContent} showsVerticalScrollIndicator={false}>
-            {/* Search Input Bar */}
+            {/* Search Input Bar with Neon Border */}
             <View style={styles.searchBar}>
-              <Ionicons name="search" size={19} color="#8E8E93" style={styles.searchIcon} />
+              <Ionicons name="search" size={19} color="#FF0000" style={styles.searchIcon} />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Şarkı, sanatçı veya tür ara..."
+                placeholder="YouTube'da şarkı, sanatçı veya tür ara..."
                 placeholderTextColor="#666666"
                 value={query}
-                onChangeText={setQuery}
+                onChangeText={handleQueryChange}
                 onSubmitEditing={() => handleSearch()}
                 returnKeyType="search"
               />
@@ -282,6 +315,7 @@ function MainScreen() {
                 <TouchableOpacity
                   onPress={() => {
                     setQuery('');
+                    setSuggestions([]);
                     setResults(ALL_CATALOG_TRACKS);
                   }}
                   style={styles.clearBtn}
@@ -291,14 +325,58 @@ function MainScreen() {
               ) : null}
             </View>
 
-            {/* Popular Search Tags */}
+            {/* Live Auto-complete Suggestions Dropdown */}
+            {suggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {suggestions.map((item, idx) => (
+                  <TouchableOpacity
+                    key={`sug-${idx}`}
+                    style={styles.suggestionRow}
+                    onPress={() => handleSelectSuggestion(item)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="search-outline" size={14} color="#8E8E93" style={{ marginRight: 10 }} />
+                    <Text style={styles.suggestionText} numberOfLines={1}>{item}</Text>
+                    <Ionicons name="arrow-forward" size={13} color="#444444" />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Filter Pills (All, Sık Dinlediklerin & Popular Search Tags) */}
             <View style={styles.filterPillsWrapper}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+                <TouchableOpacity
+                  style={[styles.filterPill, exploreFilter === 'all' && styles.activeFilterPill]}
+                  onPress={() => setExploreFilter('all')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.filterPillText, exploreFilter === 'all' && styles.activeFilterPillText]}>
+                    ✨ Keşfet
+                  </Text>
+                </TouchableOpacity>
+
+                {mostPlayed.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.filterPill, exploreFilter === 'most_played' && styles.activeFilterPill]}
+                    onPress={() => {
+                      setExploreFilter('most_played');
+                      setQuery('');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.filterPillText, exploreFilter === 'most_played' && styles.activeFilterPillText]}>
+                      🔥 Sık Dinlediklerin ({mostPlayed.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {POPULAR_SEARCH_TAGS.map((tag) => (
                   <TouchableOpacity
                     key={tag}
                     style={styles.searchTagChip}
                     onPress={() => {
+                      setExploreFilter('all');
                       setQuery(tag);
                       handleSearch(tag);
                     }}
@@ -311,25 +389,87 @@ function MainScreen() {
               </ScrollView>
             </View>
 
-            {/* Search Results or Categories */}
-            {loading ? (
-              <View style={styles.centerContainer}>
-                <ActivityIndicator size="large" color="#FF0000" />
-                <Text style={styles.loadingText}>Şarkılar aranıyor...</Text>
-              </View>
-            ) : query.trim() ? (
+            {/* Filtered View: Sık Dinlediklerin Tab */}
+            {exploreFilter === 'most_played' && !query.trim() ? (
               <View style={{ marginTop: 10 }}>
-                <Text style={styles.resultsHeader}>"{query}" Sonuçları ({results.length})</Text>
-                {results.map((item, index) => (
+                <View style={styles.sectionHeaderRow}>
+                  <View>
+                    <Text style={styles.sectionSubtitle}>SENİN ÇALMA GEÇMİŞİN</Text>
+                    <Text style={styles.sectionTitle}>🔥 En Çok Dinlediğin Şarkılar</Text>
+                  </View>
+                </View>
+
+                {mostPlayed.map((item, index) => (
                   <TrackCard
-                    key={`${item.id}-${index}`}
+                    key={`mp-${item.id}-${index}`}
                     track={item}
-                    onSelect={(t) => playTrack(t, results)}
+                    rank={index + 1}
+                    onSelect={(t) => playTrack(t, mostPlayed)}
                   />
                 ))}
               </View>
+            ) : loading ? (
+              <View style={styles.centerContainer}>
+                <ActivityIndicator size="large" color="#FF0000" />
+                <Text style={styles.loadingText}>YouTube'dan canlı müzikler çekiliyor...</Text>
+              </View>
+            ) : query.trim() ? (
+              /* Active Search Results */
+              <View style={{ marginTop: 10 }}>
+                <View style={styles.resultsHeaderRow}>
+                  <Text style={styles.resultsHeader}>
+                    "{query}" Sonuçları ({results.length})
+                  </Text>
+                  <Text style={styles.liveBadge}>CANLI YOUTUBE</Text>
+                </View>
+
+                {results.length === 0 ? (
+                  <View style={styles.centerContainer}>
+                    <Ionicons name="musical-note-outline" size={40} color="#444444" />
+                    <Text style={[styles.loadingText, { marginTop: 8 }]}>Sonuç bulunamadı</Text>
+                  </View>
+                ) : (
+                  results.map((item, index) => (
+                    <TrackCard
+                      key={`${item.id}-${index}`}
+                      track={item}
+                      rank={index + 1}
+                      onSelect={(t) => playTrack(t, results)}
+                    />
+                  ))
+                )}
+              </View>
             ) : (
+              /* Default Explore View with User's Top Played + Discover */
               <View style={{ marginTop: 6 }}>
+                {/* 1. Sık Dinlediklerin Preview (If user has history) */}
+                {mostPlayed.length > 0 && (
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={styles.sectionHeaderRow}>
+                      <View>
+                        <Text style={styles.sectionSubtitle}>SENİN POPÜLERLERİN</Text>
+                        <Text style={styles.sectionTitle}>🔥 En Çok Dinlediklerin</Text>
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setExploreFilter('most_played')}
+                        style={styles.seeAllBtn}
+                      >
+                        <Text style={styles.seeAllText}>Tümü ({mostPlayed.length})</Text>
+                        <Ionicons name="chevron-forward" size={14} color="#8E8E93" />
+                      </TouchableOpacity>
+                    </View>
+
+                    {mostPlayed.slice(0, 4).map((item, index) => (
+                      <TrackCard
+                        key={`home-mp-${item.id}-${index}`}
+                        track={item}
+                        rank={index + 1}
+                        onSelect={(t) => playTrack(t, mostPlayed)}
+                      />
+                    ))}
+                  </View>
+                )}
+
                 <CategoriesGrid onSelectCategory={handleCategorySelect} />
 
                 <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
@@ -339,10 +479,11 @@ function MainScreen() {
                   </View>
                 </View>
 
-                {ALL_CATALOG_TRACKS.slice(0, 6).map((item, index) => (
+                {ALL_CATALOG_TRACKS.slice(0, 8).map((item, index) => (
                   <TrackCard
                     key={`${item.id}-${index}`}
                     track={item}
+                    rank={index + 1}
                     onSelect={(t) => playTrack(t, ALL_CATALOG_TRACKS)}
                   />
                 ))}
@@ -621,6 +762,45 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 8,
     paddingHorizontal: 2,
+  },
+  resultsHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  liveBadge: {
+    backgroundColor: 'rgba(255, 0, 0, 0.15)',
+    color: '#FF0000',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    letterSpacing: 0.5,
+  },
+  suggestionsContainer: {
+    backgroundColor: '#16161B',
+    borderRadius: 16,
+    marginVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  suggestionText: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
   },
   bottomNavDock: {
     flexDirection: 'row',

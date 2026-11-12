@@ -19,6 +19,8 @@ import { fetchLyrics } from '../services/lyricsService';
 import AudioSeekbar from './AudioSeekbar';
 import SleepTimerModal from './SleepTimerModal';
 import SoundModeModal from './SoundModeModal';
+import CarModeModal from './CarModeModal';
+import AddToPlaylistModal from './AddToPlaylistModal';
 
 const { width, height } = Dimensions.get('window');
 const ARTWORK_SIZE = Math.min(width * 0.84, height * 0.38);
@@ -48,14 +50,18 @@ export default function PlayerModal({ visible, onClose }) {
 
   const [activeSheet, setActiveSheet] = useState(null); // null | 'lyrics' | 'queue'
   const [lyrics, setLyrics] = useState('');
+  const [parsedLyrics, setParsedLyrics] = useState([]);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [timerModalVisible, setTimerModalVisible] = useState(false);
   const [soundModeModalVisible, setSoundModeModalVisible] = useState(false);
+  const [carModeVisible, setCarModeVisible] = useState(false);
+  const [playlistModalVisible, setPlaylistModalVisible] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [isRepeat, setIsRepeat] = useState(false);
   const [pocketMode, setPocketMode] = useState(false);
   const [pocketTapCount, setPocketTapCount] = useState(0);
   const pocketTapTimeoutRef = useRef(null);
+  const lyricsScrollRef = useRef(null);
 
   const handlePocketTap = () => {
     if (pocketTapCount === 0) {
@@ -82,13 +88,34 @@ export default function PlayerModal({ visible, onClose }) {
     setLyricsLoading(true);
     try {
       const data = await fetchLyrics(currentTrack.title, currentTrack.artist);
-      setLyrics(data ? data.plainLyrics : 'Bu şarkı için şarkı sözü bulunamadı.');
+      if (data) {
+        setLyrics(data.plainLyrics || 'Şarkı sözü bulunamadı.');
+        setParsedLyrics(data.parsedLines || []);
+      } else {
+        setLyrics('Bu şarkı için şarkı sözü bulunamadı.');
+        setParsedLyrics([]);
+      }
     } catch (e) {
       setLyrics('Şarkı sözleri yüklenirken bir hata oluştu.');
+      setParsedLyrics([]);
     } finally {
       setLyricsLoading(false);
     }
   };
+
+  // Find active line in synced karaoke lyrics
+  const activeLineIndex = parsedLyrics.length > 0
+    ? parsedLyrics.findLastIndex(line => playbackPosition >= line.timeMs)
+    : -1;
+
+  useEffect(() => {
+    if (activeSheet === 'lyrics' && activeLineIndex >= 0 && lyricsScrollRef.current) {
+      lyricsScrollRef.current.scrollTo({
+        y: Math.max(0, activeLineIndex * 46 - 160),
+        animated: true,
+      });
+    }
+  }, [activeLineIndex, activeSheet]);
 
   if (!currentTrack) return null;
 
@@ -130,6 +157,15 @@ export default function PlayerModal({ visible, onClose }) {
 
           <View style={styles.headerRightBox}>
             <TouchableOpacity
+              style={[styles.headerCircleBtn, { marginRight: 6 }]}
+              onPress={() => setCarModeVisible(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="car-sport" size={17} color="#FF0033" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.pocketModeBtn}
               onPress={() => setPocketMode(true)}
               activeOpacity={0.7}
@@ -165,18 +201,29 @@ export default function PlayerModal({ visible, onClose }) {
             <Text style={styles.artist} numberOfLines={1}>{currentTrack.artist}</Text>
           </View>
 
-          <TouchableOpacity
-            onPress={handleToggleFavorite}
-            style={styles.likeCircleBtn}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            activeOpacity={0.75}
-          >
-            <Ionicons
-              name={isFavoriteCurrent ? "heart" : "heart-outline"}
-              size={22}
-              color={isFavoriteCurrent ? "#FF0033" : "#AAAAAA"}
-            />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity
+              onPress={() => setPlaylistModalVisible(true)}
+              style={[styles.likeCircleBtn, { marginRight: 8 }]}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="add" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleToggleFavorite}
+              style={styles.likeCircleBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name={isFavoriteCurrent ? "heart" : "heart-outline"}
+                size={22}
+                color={isFavoriteCurrent ? "#FF0033" : "#AAAAAA"}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* 4. Redesigned AudioSeekbar with Ample Time Label Breathing Room */}
@@ -298,8 +345,36 @@ export default function PlayerModal({ visible, onClose }) {
               {lyricsLoading ? (
                 <View style={styles.centerBox}>
                   <ActivityIndicator size="large" color="#FF0033" />
-                  <Text style={styles.loadingText}>Sözler aranıyor...</Text>
+                  <Text style={styles.loadingText}>Sözler yükleniyor...</Text>
                 </View>
+              ) : parsedLyrics.length > 0 ? (
+                <ScrollView
+                  ref={lyricsScrollRef}
+                  style={styles.sheetScroll}
+                  showsVerticalScrollIndicator={false}
+                  contentContainerStyle={{ paddingVertical: 20 }}
+                >
+                  <View style={styles.karaokeHeaderBadge}>
+                    <Ionicons name="sparkles" size={13} color="#FF9500" />
+                    <Text style={styles.karaokeBadgeText}>CANLI KARAOKE • DOKUN VE ŞARKIYA ATLA</Text>
+                  </View>
+                  {parsedLyrics.map((line, idx) => {
+                    const isActive = idx === activeLineIndex;
+                    return (
+                      <TouchableOpacity
+                        key={`line-${idx}`}
+                        style={[styles.karaokeLineBtn, isActive && styles.activeKaraokeLineBtn]}
+                        onPress={() => seekTo(line.timeMs)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.karaokeLineText, isActive && styles.activeKaraokeLineText]}>
+                          {line.text}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <View style={{ height: 60 }} />
+                </ScrollView>
               ) : (
                 <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
                   <Text style={styles.lyricsText}>{lyrics}</Text>
@@ -367,6 +442,19 @@ export default function PlayerModal({ visible, onClose }) {
         <SoundModeModal
           visible={soundModeModalVisible}
           onClose={() => setSoundModeModalVisible(false)}
+        />
+
+        {/* Car Driving Mode Modal */}
+        <CarModeModal
+          visible={carModeVisible}
+          onClose={() => setCarModeVisible(false)}
+        />
+
+        {/* Add to Playlist Modal */}
+        <AddToPlaylistModal
+          visible={playlistModalVisible}
+          onClose={() => setPlaylistModalVisible(false)}
+          track={currentTrack}
         />
 
         {/* OLED Pocket Mode Overlay */}
@@ -653,6 +741,52 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     textAlign: 'center',
     paddingVertical: 20,
+  },
+  karaokeHeaderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 149, 0, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 149, 0, 0.3)',
+  },
+  karaokeBadgeText: {
+    color: '#FF9500',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  karaokeLineBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginVertical: 4,
+  },
+  activeKaraokeLineBtn: {
+    backgroundColor: 'rgba(255, 0, 51, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 0, 51, 0.4)',
+  },
+  karaokeLineText: {
+    color: 'rgba(255, 255, 255, 0.32)',
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 28,
+    textAlign: 'center',
+  },
+  activeKaraokeLineText: {
+    color: '#FFFFFF',
+    fontSize: 23,
+    fontWeight: '900',
+    lineHeight: 32,
+    textShadowColor: 'rgba(255, 0, 51, 0.9)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
   },
   queueRow: {
     flexDirection: 'row',

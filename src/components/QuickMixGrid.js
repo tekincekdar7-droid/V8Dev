@@ -62,6 +62,10 @@ export default function QuickMixGrid() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.headerBox}>
+        <Text style={styles.subtitle}>TEK DOKUNUŞLA ÇAL</Text>
+        <Text style={styles.title}>Hızlı Karışımlar</Text>
+      </View>
       <View style={styles.grid}>
         {SHORTCUTS.map((item) => {
           const list = item.getTracks();
@@ -96,6 +100,23 @@ export default function QuickMixGrid() {
 const styles = StyleSheet.create({
   container: {
     marginVertical: 12,
+  },
+  headerBox: {
+    paddingHorizontal: 2,
+    marginBottom: 10,
+  },
+  subtitle: {
+    color: '#8E8E93',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.3,
+  },
+  title: {
+    color: '#FFFFFF',
+    fontSize: 19,
+    fontWeight: 'bold',
+    marginTop: 2,
+    letterSpacing: 0.2,
   },
   grid: {
     flexDirection: 'row',

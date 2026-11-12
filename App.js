@@ -21,12 +21,16 @@ import {
   getSearchSuggestions,
   INSTANT_TRENDING_TRACKS,
   QUICK_PICKS_TRACKS,
+  LISTEN_AGAIN_TRACKS,
+  NEW_RELEASES_TRACKS,
   ALL_CATALOG_TRACKS,
   THEMATIC_SECTIONS,
   TOP_ARTISTS
 } from './src/services/musicApi';
 import { getMostPlayedTracks } from './src/services/historyManager';
 import TrackCard from './src/components/TrackCard';
+import TrackSquareCard from './src/components/TrackSquareCard';
+import HorizontalTrackCarousel from './src/components/HorizontalTrackCarousel';
 import MiniPlayer from './src/components/MiniPlayer';
 import PlayerModal from './src/components/PlayerModal';
 import OfflineLibrary from './src/components/OfflineLibrary';
@@ -108,12 +112,13 @@ function MainScreen() {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(ALL_CATALOG_TRACKS);
-  const [quickPicks, setQuickPicks] = useState(QUICK_PICKS_TRACKS.slice(0, 4));
-  const [topCharts, setTopCharts] = useState(INSTANT_TRENDING_TRACKS.slice(0, 5));
+  const [quickPicks, setQuickPicks] = useState(QUICK_PICKS_TRACKS);
+  const [topCharts, setTopCharts] = useState(INSTANT_TRENDING_TRACKS);
   const [mostPlayed, setMostPlayed] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [exploreFilter, setExploreFilter] = useState('all'); // 'all' | 'most_played'
   const [homeTopFilter, setHomeTopFilter] = useState('user'); // 'user' | 'global'
+  const [genreViewMode, setGenreViewMode] = useState('grid'); // 'grid' | 'list'
   const [loading, setLoading] = useState(false);
   const [playerModalOpen, setPlayerModalOpen] = useState(false);
   const [soundModeModalOpen, setSoundModeModalOpen] = useState(false);
@@ -137,8 +142,8 @@ function MainScreen() {
     try {
       const trending = await getTrendingMusic();
       if (trending && trending.length > 0) {
-        setQuickPicks(trending.slice(0, 4));
-        setTopCharts(trending.slice(0, 5));
+        setQuickPicks(trending.slice(0, 8));
+        setTopCharts(trending.slice(0, 10));
         setResults(trending);
       }
     } catch (e) {
@@ -211,8 +216,8 @@ function MainScreen() {
   };
 
   const displayedTopTracks = (homeTopFilter === 'user' && mostPlayed.length > 0)
-    ? mostPlayed.slice(0, 6)
-    : topCharts.slice(0, 6);
+    ? mostPlayed
+    : (topCharts.length > 0 ? topCharts : INSTANT_TRENDING_TRACKS);
 
   return (
     <SafeAreaView style={styles.safeContainer}>
@@ -315,29 +320,73 @@ function MainScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* 2. Category Track List */}
-                <View style={[styles.sectionHeaderRow, { marginBottom: 10 }]}>
+                {/* 2. Category Top Hits Box Carousel */}
+                <HorizontalTrackCarousel
+                  title={`${GENRE_CONFIG[selectedFilter].title} Zirvesi`}
+                  subtitle="ÖNE ÇIKAN PARÇALAR"
+                  showRank
+                  tracks={GENRE_CONFIG[selectedFilter].tracks.slice(0, 6)}
+                  cardWidth={146}
+                  cardHeight={146}
+                />
+
+                {/* 3. Category All Tracks (YouTube Music Box Grid / List Toggle) */}
+                <View style={[styles.sectionHeaderRow, { marginBottom: 12, marginTop: 16 }]}>
                   <View>
                     <Text style={styles.sectionSubtitle}>LİSTE SIRALAMASI</Text>
-                    <Text style={styles.sectionTitle}>En Popüler Parçalar</Text>
+                    <Text style={styles.sectionTitle}>Tüm {GENRE_CONFIG[selectedFilter].title}</Text>
                   </View>
-                  <Text style={styles.genreTrackCount}>
-                    {GENRE_CONFIG[selectedFilter].tracks.length} Parça
-                  </Text>
+
+                  <View style={styles.miniPillToggle}>
+                    <TouchableOpacity
+                      style={[styles.miniToggleBtn, genreViewMode === 'grid' && styles.activeMiniToggleBtn]}
+                      onPress={() => setGenreViewMode('grid')}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="grid" size={12} color={genreViewMode === 'grid' ? "#FFFFFF" : "#888888"} />
+                      <Text style={[styles.miniToggleText, genreViewMode === 'grid' && styles.activeMiniToggleText, { marginLeft: 4 }]}>
+                        Kutu
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.miniToggleBtn, genreViewMode === 'list' && styles.activeMiniToggleBtn]}
+                      onPress={() => setGenreViewMode('list')}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons name="list" size={13} color={genreViewMode === 'list' ? "#FFFFFF" : "#888888"} />
+                      <Text style={[styles.miniToggleText, genreViewMode === 'list' && styles.activeMiniToggleText, { marginLeft: 4 }]}>
+                        Liste
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
-                <View style={styles.trackList}>
-                  {GENRE_CONFIG[selectedFilter].tracks.map((track, idx) => (
-                    <TrackCard
-                      key={`genre-${selectedFilter}-${track.id}-${idx}`}
-                      rank={idx + 1}
-                      track={track}
-                      onSelect={(t) => playTrack(t, GENRE_CONFIG[selectedFilter].tracks)}
-                    />
-                  ))}
-                </View>
+                {genreViewMode === 'grid' ? (
+                  <View style={styles.genreBoxGrid}>
+                    {GENRE_CONFIG[selectedFilter].tracks.map((track, idx) => (
+                      <TrackSquareCard
+                        key={`genre-grid-${selectedFilter}-${track.id}-${idx}`}
+                        rank={idx + 1}
+                        track={track}
+                        onSelect={(t) => playTrack(t, GENRE_CONFIG[selectedFilter].tracks)}
+                      />
+                    ))}
+                  </View>
+                ) : (
+                  <View style={styles.trackList}>
+                    {GENRE_CONFIG[selectedFilter].tracks.map((track, idx) => (
+                      <TrackCard
+                        key={`genre-list-${selectedFilter}-${track.id}-${idx}`}
+                        rank={idx + 1}
+                        track={track}
+                        onSelect={(t) => playTrack(t, GENRE_CONFIG[selectedFilter].tracks)}
+                      />
+                    ))}
+                  </View>
+                )}
 
-                {/* 3. Category Star Artists */}
+                {/* 4. Category Star Artists */}
                 {GENRE_CONFIG[selectedFilter].artists && GENRE_CONFIG[selectedFilter].artists.length > 0 && (
                   <View style={{ marginTop: 20 }}>
                     <View style={styles.sectionHeaderRow}>
@@ -366,15 +415,28 @@ function MainScreen() {
             ) : (
               /* ==================== STANDARD HOME VIEW (TÜMÜ) ==================== */
               <>
-                {/* 4. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
+                {/* 1. ÜST KISIM KUTUCUKLARI: Hızlı Seçimler (Quick Picks Box Shelf) */}
+                <HorizontalTrackCarousel
+                  title="Hızlı Seçimler"
+                  subtitle="SENİN İÇİN SEÇİLDİ"
+                  tracks={quickPicks.length > 0 ? quickPicks : QUICK_PICKS_TRACKS}
+                  cardWidth={146}
+                  cardHeight={146}
+                />
+
+                {/* 2. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
                 <QuickMixGrid />
 
-                {/* 5. 🔥 ÖNE ÇIKAN VE EN ÇOK DİNLENENLER (STREAMLINED & CLEAN) */}
+                {/* 3. 🔥 ALT KISIM KUTUCUKLARI: Trend & Zirvedekiler (YouTube Music Box Shelf) */}
                 <View style={styles.topPlayedCompiledSection}>
                   <View style={styles.sectionHeaderRow}>
                     <View>
-                      <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
-                      <Text style={styles.sectionTitle}>🔥 Trend & Öne Çıkanlar</Text>
+                      <Text style={styles.sectionSubtitle}>
+                        {homeTopFilter === 'user' ? 'SENİN LİSTEN' : 'EN ÇOK DİNLENENLER'}
+                      </Text>
+                      <Text style={styles.sectionTitle}>
+                        {homeTopFilter === 'user' ? '👑 En Çok Dinlediklerin' : '🔥 Trend & Zirvedekiler'}
+                      </Text>
                     </View>
 
                     {/* Switch between user's most played & global top */}
@@ -402,16 +464,14 @@ function MainScreen() {
                   </View>
 
                   {displayedTopTracks.length > 0 ? (
-                    <View style={styles.trackList}>
-                      {displayedTopTracks.slice(0, 5).map((track, idx) => (
-                        <TrackCard
-                          key={`home-top-${track.id}-${idx}`}
-                          rank={idx + 1}
-                          track={track}
-                          onSelect={(t) => playTrack(t, displayedTopTracks)}
-                        />
-                      ))}
-                    </View>
+                    <HorizontalTrackCarousel
+                      title=""
+                      subtitle=""
+                      showRank
+                      tracks={displayedTopTracks}
+                      cardWidth={146}
+                      cardHeight={146}
+                    />
                   ) : (
                     <View style={styles.emptyTopPlayedCard}>
                       <Ionicons name="flame-outline" size={26} color="#FF9500" />
@@ -423,10 +483,28 @@ function MainScreen() {
                   )}
                 </View>
 
-                {/* 6. Öne Çıkan Listeler & Mixler */}
+                {/* 4. 🔁 ALT KISIM KUTUCUKLARI: Tekrar Dinle (YouTube Music Box Shelf) */}
+                <HorizontalTrackCarousel
+                  title="Tekrar Dinle"
+                  subtitle="UNUTULMAYANLAR"
+                  tracks={LISTEN_AGAIN_TRACKS}
+                  cardWidth={146}
+                  cardHeight={146}
+                />
+
+                {/* 5. ✨ SENİN İÇİN MİXLER */}
                 <PlaylistsCarousel onSelectMix={handleMixSelect} />
 
-                {/* 7. Popüler Sanatçılar */}
+                {/* 6. 🆕 ALT KISIM KUTUCUKLARI: Yeni Çıkanlar & Trendler (YouTube Music Box Shelf) */}
+                <HorizontalTrackCarousel
+                  title="Yeni Çıkanlar & Trendler"
+                  subtitle="YENİ PARÇALAR"
+                  tracks={NEW_RELEASES_TRACKS}
+                  cardWidth={146}
+                  cardHeight={146}
+                />
+
+                {/* 7. ⭐ POPÜLER SANATÇILAR */}
                 <ArtistsRow onSelectArtist={handleArtistSelect} />
               </>
             )}
@@ -1157,5 +1235,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 6,
     textAlign: 'center',
+  },
+  genreBoxGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
   },
 });

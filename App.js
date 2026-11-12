@@ -216,7 +216,16 @@ function MainScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0E" />
+      <StatusBar barStyle="light-content" backgroundColor="#070709" />
+
+      {/* Ambient Background Watermark Logo & Studio Glows */}
+      <View style={styles.ambientBackgroundLayer} pointerEvents="none">
+        <View style={styles.ambientLogoWrapper}>
+          <Ionicons name="musical-notes" size={320} color="#FF0033" style={styles.ambientWatermarkLogo} />
+        </View>
+        <View style={styles.ambientGlowTop} />
+        <View style={styles.ambientGlowBottom} />
+      </View>
 
       {/* Main Content View based on Tab */}
       <View style={styles.content}>
@@ -360,16 +369,26 @@ function MainScreen() {
                 {/* 4. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
                 <QuickMixGrid />
 
-                {/* 5. 🔥 EN ÇOK DİNLENENLER DERLEMESİ (ANA SAYFA ÖZEL) */}
+                {/* 5. 🔥 ÖNE ÇIKAN VE EN ÇOK DİNLENENLER (STREAMLINED & CLEAN) */}
                 <View style={styles.topPlayedCompiledSection}>
                   <View style={styles.sectionHeaderRow}>
                     <View>
-                      <Text style={styles.sectionSubtitle}>ZİRVEDEKİLER & TREND</Text>
-                      <Text style={styles.sectionTitle}>🔥 En Çok Dinlenenler</Text>
+                      <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
+                      <Text style={styles.sectionTitle}>🔥 Trend & Öne Çıkanlar</Text>
                     </View>
 
                     {/* Switch between user's most played & global top */}
                     <View style={styles.miniPillToggle}>
+                      <TouchableOpacity
+                        style={[styles.miniToggleBtn, homeTopFilter === 'global' && styles.activeMiniToggleBtn]}
+                        onPress={() => setHomeTopFilter('global')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.miniToggleText, homeTopFilter === 'global' && styles.activeMiniToggleText]}>
+                          Hitler
+                        </Text>
+                      </TouchableOpacity>
+
                       <TouchableOpacity
                         style={[styles.miniToggleBtn, homeTopFilter === 'user' && styles.activeMiniToggleBtn]}
                         onPress={() => setHomeTopFilter('user')}
@@ -379,22 +398,12 @@ function MainScreen() {
                           Senin ({mostPlayed.length})
                         </Text>
                       </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.miniToggleBtn, homeTopFilter === 'global' && styles.activeMiniToggleBtn]}
-                        onPress={() => setHomeTopFilter('global')}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={[styles.miniToggleText, homeTopFilter === 'global' && styles.activeMiniToggleText]}>
-                          Top Liste
-                        </Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
 
                   {displayedTopTracks.length > 0 ? (
                     <View style={styles.trackList}>
-                      {displayedTopTracks.map((track, idx) => (
+                      {displayedTopTracks.slice(0, 5).map((track, idx) => (
                         <TrackCard
                           key={`home-top-${track.id}-${idx}`}
                           rank={idx + 1}
@@ -414,36 +423,10 @@ function MainScreen() {
                   )}
                 </View>
 
-                {/* 6. Günün Parçaları (Hızlı Seçimler) */}
-                <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
-                  <View>
-                    <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
-                    <Text style={styles.sectionTitle}>Günün Parçaları</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setActiveTab('explore')}
-                    style={styles.seeAllBtn}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Text style={styles.seeAllText}>Tümü</Text>
-                    <Ionicons name="chevron-forward" size={14} color="#8E8E93" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.trackList}>
-                  {quickPicks.map((track) => (
-                    <TrackCard
-                      key={track.id}
-                      track={track}
-                      onSelect={(t) => playTrack(t, quickPicks)}
-                    />
-                  ))}
-                </View>
-
-                {/* 7. Öne Çıkan Listeler & Mixler */}
+                {/* 6. Öne Çıkan Listeler & Mixler */}
                 <PlaylistsCarousel onSelectMix={handleMixSelect} />
 
-                {/* 8. Popüler Sanatçılar */}
+                {/* 7. Popüler Sanatçılar */}
                 <ArtistsRow onSelectArtist={handleArtistSelect} />
               </>
             )}
@@ -731,6 +714,41 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#070709',
   },
+  ambientBackgroundLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+    zIndex: 0,
+  },
+  ambientLogoWrapper: {
+    position: 'absolute',
+    top: 50,
+    right: -60,
+    opacity: 0.042,
+    transform: [{ rotate: '-15deg' }],
+  },
+  ambientWatermarkLogo: {
+    textShadowColor: 'rgba(255, 0, 50, 0.6)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 40,
+  },
+  ambientGlowTop: {
+    position: 'absolute',
+    top: -80,
+    left: -60,
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: 'rgba(255, 0, 50, 0.07)',
+  },
+  ambientGlowBottom: {
+    position: 'absolute',
+    bottom: 140,
+    right: -80,
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(147, 51, 234, 0.05)',
+  },
   content: {
     flex: 1,
   },
@@ -809,16 +827,23 @@ const styles = StyleSheet.create({
     paddingRight: 16,
   },
   filterPill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.045)',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   activeFilterPill: {
     backgroundColor: '#FFFFFF',
     borderColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
   },
   filterPillText: {
     color: '#AAAAAA',
@@ -962,19 +987,21 @@ const styles = StyleSheet.create({
   },
   miniPillToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderRadius: 20,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 3,
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
   miniToggleBtn: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 18,
+    borderRadius: 16,
   },
   activeMiniToggleBtn: {
-    backgroundColor: '#FF0000',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   miniToggleText: {
     color: '#8E8E93',
@@ -988,13 +1015,17 @@ const styles = StyleSheet.create({
   emptyTopPlayedCard: {
     paddingVertical: 24,
     paddingHorizontal: 16,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   emptyTopPlayedTitle: {
     color: '#FFFFFF',
@@ -1053,12 +1084,17 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   genreHeroCard: {
-    backgroundColor: 'rgba(26, 26, 30, 0.95)',
-    borderRadius: 20,
+    backgroundColor: 'rgba(22, 22, 28, 0.82)',
+    borderRadius: 22,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1.5,
     gap: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 5,
   },
   genreHeroHeader: {
     flexDirection: 'row',

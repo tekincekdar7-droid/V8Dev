@@ -670,7 +670,7 @@ export const EXPLORE_CATEGORIES = [
   { id: 'c7', title: 'Antrenman & Fitness', color: '#FF9800', icon: 'fitness', query: 'Gym Workout Motivation Music' },
   { id: 'c8', title: 'Gece & Rahatlama', color: '#283593', icon: 'moon', query: 'Deep Chill Relaxation Music' },
   { id: 'c9', title: '90\'lar Nostalji', color: '#D81B60', icon: 'time', query: '90lar Türkçe Pop Klasikler' },
-  { id: 'c10', title: 'Akustik & Slow', color: '#8D6E63', icon: 'guitar', query: 'Akustik Şarkılar Türkçe' }
+  { id: 'c10', title: 'Akustik & Slow', color: '#8D6E63', icon: 'musical-notes', query: 'Akustik Şarkılar Türkçe' }
 ];
 
 export async function getTrendingMusic() {

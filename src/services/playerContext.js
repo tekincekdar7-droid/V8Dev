@@ -205,23 +205,11 @@ export function PlayerProvider({ children }) {
         // Play downloaded offline track via native expo-audio
         startNativePlayer(track.localAudioUri, track);
       } else {
-        // High-performance native audio stream first (runs in background on iOS)
-        try {
-          const streamData = await getAudioStreamUrl(track.id);
-          if (streamData && streamData.streamUrl) {
-            console.log('[Audio] Native audio stream found! Starting AVPlayer:', track.title);
-            startNativePlayer(streamData.streamUrl, track);
-            return;
-          }
-        } catch (streamErr) {
-          console.warn('[Audio] Direct stream error, falling back to YouTube engine:', streamErr.message);
-        }
-
-        // Direct YouTube Engine fallback
+        // Direct YouTube Engine online playback (instant, zero 403 GoogleVideo errors)
         cleanupLocalPlayer();
         setActiveEngine('youtube');
         setIsPlaying(true);
-        setIsLoading(false);
+        setIsLoading(true);
       }
     } catch (err) {
       console.error('[Audio] Failed to play track:', err);
@@ -379,8 +367,7 @@ export function PlayerProvider({ children }) {
         setSleepTimer,
       }}
     >
-      {children}
-      {/* Official YouTube Audio Player Fallback */}
+      {/* Official YouTube Audio Player mounted first (safely behind dark UI) */}
       <YouTubeAudioEngine
         ref={ytEngineRef}
         currentVideoId={currentOnlineVideoId}
@@ -389,6 +376,7 @@ export function PlayerProvider({ children }) {
         onTimeUpdate={handleEngineTimeUpdate}
         onError={handleEngineError}
       />
+      {children}
     </PlayerContext.Provider>
   );
 }

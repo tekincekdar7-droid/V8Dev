@@ -1,8 +1,9 @@
 // musicApi.js - Live YouTube Music search, instant stream resolution & curated feeds
 const INVIDIOUS_INSTANCES = [
   'https://yt.chocolatemoo53.com',
-  'https://inv.vern.cc',
-  'https://invidious.jing.rocks'
+  'https://invidious.nerdvpn.de',
+  'https://invidious.tiekoetter.com',
+  'https://inv.nadeko.net'
 ];
 
 export function parseDurationToSeconds(durationStr) {
@@ -189,7 +190,7 @@ export async function getAudioStreamUrl(videoId) {
   for (const baseUrl of INVIDIOUS_INSTANCES) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2500);
+      const timeoutId = setTimeout(() => controller.abort(), 2200);
       const res = await fetch(`${baseUrl}/api/v1/videos/${videoId}`, {
         signal: controller.signal,
         headers: { 'Accept': 'application/json' }
@@ -204,14 +205,26 @@ export async function getAudioStreamUrl(videoId) {
       );
       const selected = audioFormats.find(f => f.audioQuality === 'AUDIO_QUALITY_MEDIUM') || audioFormats[0];
       if (selected && selected.url) {
-        return {
-          streamUrl: selected.url,
-          container: selected.container || 'm4a',
-          bitrate: selected.bitrate,
-          title: data.title,
-          artist: data.author,
-          thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
-        };
+        // Quick 1-second verification probe to ensure 200/206 and not 403
+        try {
+          const testCtrl = new AbortController();
+          const testTimeout = setTimeout(() => testCtrl.abort(), 1200);
+          const probe = await fetch(selected.url, {
+            signal: testCtrl.signal,
+            headers: { Range: 'bytes=0-10' }
+          });
+          clearTimeout(testTimeout);
+          if (probe.status === 200 || probe.status === 206) {
+            return {
+              streamUrl: selected.url,
+              container: selected.container || 'm4a',
+              bitrate: selected.bitrate,
+              title: data.title,
+              artist: data.author,
+              thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+            };
+          }
+        } catch (probeErr) {}
       }
     } catch (e) {}
   }

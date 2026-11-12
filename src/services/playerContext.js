@@ -213,11 +213,23 @@ export function PlayerProvider({ children }) {
         // Play downloaded offline track via native expo-audio
         startNativePlayer(track.localAudioUri, track);
       } else {
-        // Direct YouTube Engine online playback (instant, zero 403 GoogleVideo errors)
+        // 1. Try verified high-performance Native Stream (instant, lock-screen, background, crystal clear audio)
+        try {
+          const streamData = await getAudioStreamUrl(track.id);
+          if (streamData && streamData.streamUrl) {
+            console.log('[Audio] Verified Native Stream found! Starting AVPlayer:', track.title);
+            startNativePlayer(streamData.streamUrl, track);
+            return;
+          }
+        } catch (streamErr) {
+          console.warn('[Audio] Direct stream probe failed, falling back to YouTube engine:', streamErr.message);
+        }
+
+        // 2. YouTube Engine Fallback
         cleanupLocalPlayer();
         setActiveEngine('youtube');
         setIsPlaying(true);
-        setIsLoading(true);
+        setIsLoading(false);
       }
     } catch (err) {
       console.error('[Audio] Failed to play track:', err);

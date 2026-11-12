@@ -174,7 +174,13 @@ export function PlayerProvider({ children }) {
   const handleEngineError = (err) => {
     console.warn('[PlayerContext] YouTube engine error:', err);
     setIsLoading(false);
-    if (err === 'embed_not_allowed' || err === 'video_not_found') {
+    if (
+      err === 'embed_not_allowed' ||
+      err === 'video_not_found' ||
+      err === 100 ||
+      err === 101 ||
+      err === 150
+    ) {
       skipToNext();
     }
   };

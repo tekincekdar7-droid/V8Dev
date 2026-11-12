@@ -181,16 +181,16 @@ export default YouTubeAudioEngine;
 const styles = StyleSheet.create({
   hiddenContainer: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 100,
-    height: 100,
-    opacity: 1,
-    zIndex: -9999,
+    bottom: 0,
+    right: 0,
+    width: 2,
+    height: 2,
+    opacity: 0.05,
+    overflow: 'hidden',
   },
   webView: {
-    width: 100,
-    height: 100,
+    width: 2,
+    height: 2,
     backgroundColor: 'transparent',
   },
 });

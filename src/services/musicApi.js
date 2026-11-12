@@ -186,32 +186,39 @@ export async function searchMusic(query) {
 
 async function tryResolveDirectStream(videoId) {
   if (!videoId) return null;
+  console.log('[musicApi] Resolving stream for videoId:', videoId);
   for (const baseUrl of INVIDIOUS_INSTANCES) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2200);
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       const res = await fetch(`${baseUrl}/api/v1/videos/${videoId}`, {
         signal: controller.signal,
         headers: { 'Accept': 'application/json' }
       });
       clearTimeout(timeoutId);
+      console.log(`[musicApi] ${baseUrl} HTTP ${res.status}`);
       if (!res.ok) continue;
       const data = await res.json();
 
-      if (!data || !data.adaptiveFormats) continue;
+      if (!data || !data.adaptiveFormats) {
+        console.log(`[musicApi] ${baseUrl} No adaptiveFormats`);
+        continue;
+      }
       const audioFormats = data.adaptiveFormats.filter(
         f => f.type && (f.type.startsWith('audio/mp4') || f.container === 'm4a')
       );
       const selected = audioFormats.find(f => f.audioQuality === 'AUDIO_QUALITY_MEDIUM') || audioFormats[0];
       if (selected && selected.url) {
+        console.log(`[musicApi] Found audio format, verifying stream...`);
         try {
           const testCtrl = new AbortController();
-          const testTimeout = setTimeout(() => testCtrl.abort(), 1200);
+          const testTimeout = setTimeout(() => testCtrl.abort(), 3500);
           const probe = await fetch(selected.url, {
-            signal: testCtrl.signal,
-            headers: { Range: 'bytes=0-10' }
+            method: 'HEAD',
+            signal: testCtrl.signal
           });
           clearTimeout(testTimeout);
+          console.log(`[musicApi] Probe status: ${probe.status}`);
           if (probe.status === 200 || probe.status === 206) {
             return {
               streamUrl: selected.url,
@@ -221,10 +228,26 @@ async function tryResolveDirectStream(videoId) {
               artist: data.author,
               thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
             };
+          } else if (probe.status === 403) {
+            console.log(`[musicApi] Stream returned 403, trying next or fallback`);
           }
-        } catch (probeErr) {}
+        } catch (probeErr) {
+          // React Native iOS fetch to googlevideo might encounter CORS or redirect quirks in JS,
+          // but native AVPlayer bypasses browser CORS completely. Trust the stream for AVPlayer:
+          console.log(`[musicApi] Probe note: ${probeErr.message}, delivering to native AVPlayer`);
+          return {
+            streamUrl: selected.url,
+            container: selected.container || 'm4a',
+            bitrate: selected.bitrate,
+            title: data.title,
+            artist: data.author,
+            thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`
+          };
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.log(`[musicApi] ${baseUrl} error:`, e.message);
+    }
   }
   return null;
 }

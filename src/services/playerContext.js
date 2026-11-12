@@ -40,7 +40,7 @@ export function PlayerProvider({ children }) {
         await setAudioModeAsync({
           playsInSilentMode: true,
           shouldPlayInBackground: true,
-          interruptionMode: 'doNotMixPersistent',
+          interruptionMode: 'mixWithOthers',
           allowsRecording: false,
           shouldRouteThroughEarpiece: false,
         });

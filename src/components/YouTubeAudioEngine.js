@@ -6,6 +6,7 @@ import { WebView } from 'react-native-webview';
 const INJECTED_JS = `
 (function() {
   var lastSentTime = 0;
+  var hasUnmuted = false;
 
   function attach() {
     var v = document.querySelector('video');
@@ -22,13 +23,37 @@ const INJECTED_JS = `
       } catch (e) {}
     }
 
+    function tryUnmute() {
+      if (!hasUnmuted && v) {
+        v.muted = false;
+        v.volume = 1.0;
+        hasUnmuted = true;
+      }
+    }
+
     send('ready', { duration: v.duration || 0 });
 
-    v.addEventListener('play', function() { send('stateChange', 'playing'); });
-    v.addEventListener('pause', function() { send('stateChange', 'paused'); });
-    v.addEventListener('ended', function() { send('stateChange', 'ended'); });
-    v.addEventListener('waiting', function() { send('stateChange', 'buffering'); });
-    v.addEventListener('playing', function() { send('stateChange', 'playing'); });
+    v.addEventListener('play', function() {
+      tryUnmute();
+      send('stateChange', 'playing');
+    });
+
+    v.addEventListener('playing', function() {
+      tryUnmute();
+      send('stateChange', 'playing');
+    });
+
+    v.addEventListener('pause', function() {
+      send('stateChange', 'paused');
+    });
+
+    v.addEventListener('ended', function() {
+      send('stateChange', 'ended');
+    });
+
+    v.addEventListener('waiting', function() {
+      send('stateChange', 'buffering');
+    });
 
     v.addEventListener('timeupdate', function() {
       var now = Date.now();
@@ -38,9 +63,15 @@ const INJECTED_JS = `
       }
     });
 
-    if (v.paused) {
-      v.play().catch(function() {});
-    }
+    // Start playing with iOS-safe muted fallback
+    v.play().then(function() {
+      tryUnmute();
+    }).catch(function() {
+      v.muted = true;
+      v.play().then(function() {
+        setTimeout(tryUnmute, 300);
+      }).catch(function() {});
+    });
   }
 
   attach();
@@ -71,7 +102,13 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
         webViewRef.current?.injectJavaScript(`
           (function() {
             var v = document.querySelector('video');
-            if (v) { v.play().catch(function(){}); }
+            if (v) {
+              v.muted = false;
+              v.play().catch(function() {
+                v.muted = true;
+                v.play().then(function() { v.muted = false; });
+              });
+            }
           })();
           true;
         `);
@@ -96,7 +133,13 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
       webViewRef.current?.injectJavaScript(`
         (function() {
           var v = document.querySelector('video');
-          if (v && v.paused) { v.play().catch(function(){}); }
+          if (v && v.paused) {
+            v.muted = false;
+            v.play().catch(function() {
+              v.muted = true;
+              v.play().then(function() { v.muted = false; });
+            });
+          }
         })();
         true;
       `);
@@ -116,15 +159,6 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
       const { type, data } = JSON.parse(event.nativeEvent.data);
       if (type === 'ready') {
         console.log('[YouTubeEngine] Video ready for:', currentVideoId);
-        if (isPlaying) {
-          webViewRef.current?.injectJavaScript(`
-            (function() {
-              var v = document.querySelector('video');
-              if (v && v.paused) { v.play().catch(function(){}); }
-            })();
-            true;
-          `);
-        }
       } else if (type === 'stateChange') {
         console.log('[YouTubeEngine] State:', data);
         if (onStateChange) onStateChange(data);
@@ -138,7 +172,8 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
     return null;
   }
 
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1&playsinline=1&controls=0&rel=0&modestbranding=1&enablejsapi=1`;
+  // mute=1 ensures iOS WebKit permits immediate autoplay, while INJECTED_JS un-mutes automatically
+  const embedUrl = `https://www.youtube-nocookie.com/embed/${currentVideoId}?autoplay=1&playsinline=1&controls=0&mute=1&rel=0&modestbranding=1&enablejsapi=1`;
 
   return (
     <View style={styles.hiddenContainer} pointerEvents="none">

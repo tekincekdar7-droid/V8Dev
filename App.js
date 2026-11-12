@@ -21,7 +21,8 @@ import {
   INSTANT_TRENDING_TRACKS,
   QUICK_PICKS_TRACKS,
   ALL_CATALOG_TRACKS,
-  THEMATIC_SECTIONS
+  THEMATIC_SECTIONS,
+  TOP_ARTISTS
 } from './src/services/musicApi';
 import { getMostPlayedTracks } from './src/services/historyManager';
 import TrackCard from './src/components/TrackCard';
@@ -42,6 +43,45 @@ const FILTER_PILLS = [
   { id: 'lofi', label: '🌙 Lo-Fi & Gece' },
   { id: 'global', label: '🌍 Global Hit' },
 ];
+
+const GENRE_CONFIG = {
+  pop: {
+    id: 'pop',
+    title: 'Türkçe Pop Zirvesi',
+    subtitle: 'EN ÇOK DİNLENEN YERLİ POP HİTLERİ',
+    icon: 'flame',
+    color: '#FF0033',
+    tracks: THEMATIC_SECTIONS.turkishPop.tracks,
+    artists: TOP_ARTISTS.filter(a => ['Tarkan', 'Simge', 'Semicenk', 'Mabel Matiz', 'Sezen Aksu'].includes(a.name)),
+  },
+  rap: {
+    id: 'rap',
+    title: 'Türkçe Rap & Sokak',
+    subtitle: 'AĞIR BASSLAR VE HIZLI FLOWLAR',
+    icon: 'headset',
+    color: '#1DB954',
+    tracks: THEMATIC_SECTIONS.rapTrap.tracks,
+    artists: TOP_ARTISTS.filter(a => ['Motive', 'Eminem'].includes(a.name)),
+  },
+  lofi: {
+    id: 'lofi',
+    title: 'Gece Modu & Lo-Fi',
+    subtitle: 'HUZUR, KAHVE VE SAKİN ÇALIŞMA',
+    icon: 'moon',
+    color: '#7C4DFF',
+    tracks: THEMATIC_SECTIONS.chillLofi.tracks,
+    artists: TOP_ARTISTS.filter(a => ['Coldplay', 'Billie Eilish'].includes(a.name)),
+  },
+  global: {
+    id: 'global',
+    title: 'Global Billboard Hits',
+    subtitle: 'DÜNYANIN EN ÇOK DİNLENENLERİ',
+    icon: 'globe',
+    color: '#2979FF',
+    tracks: THEMATIC_SECTIONS.globalHits.tracks,
+    artists: TOP_ARTISTS.filter(a => ['The Weeknd', 'Dua Lipa', 'Imagine Dragons', 'Coldplay'].includes(a.name)),
+  },
+};
 
 const POPULAR_SEARCH_TAGS = [
   'Tarkan',
@@ -107,14 +147,8 @@ function MainScreen() {
 
   const handleFilterChange = (filterId) => {
     setSelectedFilter(filterId);
-    if (filterId === 'pop') {
-      setQuickPicks(THEMATIC_SECTIONS.turkishPop.tracks.slice(0, 4));
-    } else if (filterId === 'rap') {
-      setQuickPicks(THEMATIC_SECTIONS.rapTrap.tracks.slice(0, 4));
-    } else if (filterId === 'lofi') {
-      setQuickPicks(THEMATIC_SECTIONS.chillLofi.tracks.slice(0, 4));
-    } else if (filterId === 'global') {
-      setQuickPicks(THEMATIC_SECTIONS.globalHits.tracks.slice(0, 4));
+    if (GENRE_CONFIG[filterId]?.tracks) {
+      setQuickPicks(GENRE_CONFIG[filterId].tracks.slice(0, 4));
     } else {
       setQuickPicks(QUICK_PICKS_TRACKS.slice(0, 4));
     }
@@ -243,94 +277,175 @@ function MainScreen() {
               </ScrollView>
             </View>
 
-            {/* 4. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
-            <QuickMixGrid />
-
-            {/* 5. 🔥 EN ÇOK DİNLENENLER DERLEMESİ (ANA SAYFA ÖZEL) */}
-            <View style={styles.topPlayedCompiledSection}>
-              <View style={styles.sectionHeaderRow}>
-                <View>
-                  <Text style={styles.sectionSubtitle}>ZİRVEDEKİLER & TREND</Text>
-                  <Text style={styles.sectionTitle}>🔥 En Çok Dinlenenler</Text>
-                </View>
-
-                {/* Switch between user's most played & global top */}
-                <View style={styles.miniPillToggle}>
-                  <TouchableOpacity
-                    style={[styles.miniToggleBtn, homeTopFilter === 'user' && styles.activeMiniToggleBtn]}
-                    onPress={() => setHomeTopFilter('user')}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={[styles.miniToggleText, homeTopFilter === 'user' && styles.activeMiniToggleText]}>
-                      Senin ({mostPlayed.length})
-                    </Text>
-                  </TouchableOpacity>
+            {selectedFilter !== 'all' && GENRE_CONFIG[selectedFilter] ? (
+              /* ==================== CATEGORY SHOWCASE (POP, RAP, LO-FI, GLOBAL) ==================== */
+              <View style={styles.genreShowcaseWrapper}>
+                {/* 1. Category Hero Banner */}
+                <View style={[styles.genreHeroCard, { borderColor: GENRE_CONFIG[selectedFilter].color }]}>
+                  <View style={styles.genreHeroHeader}>
+                    <View style={[styles.genreIconCircle, { backgroundColor: GENRE_CONFIG[selectedFilter].color }]}>
+                      <Ionicons name={GENRE_CONFIG[selectedFilter].icon} size={24} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 12 }}>
+                      <Text style={styles.genreHeroSubtitle}>{GENRE_CONFIG[selectedFilter].subtitle}</Text>
+                      <Text style={styles.genreHeroTitle}>{GENRE_CONFIG[selectedFilter].title}</Text>
+                    </View>
+                  </View>
 
                   <TouchableOpacity
-                    style={[styles.miniToggleBtn, homeTopFilter === 'global' && styles.activeMiniToggleBtn]}
-                    onPress={() => setHomeTopFilter('global')}
-                    activeOpacity={0.75}
+                    style={[styles.genrePlayAllBtn, { backgroundColor: GENRE_CONFIG[selectedFilter].color }]}
+                    onPress={() => {
+                      const list = GENRE_CONFIG[selectedFilter].tracks || [];
+                      if (list.length > 0) playTrack(list[0], list);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.miniToggleText, homeTopFilter === 'global' && styles.activeMiniToggleText]}>
-                      Top Liste
-                    </Text>
+                    <Ionicons name="play" size={18} color="#FFFFFF" />
+                    <Text style={styles.genrePlayAllBtnText}>Tümünü Çal</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
 
-              {displayedTopTracks.length > 0 ? (
+                {/* 2. Category Track List */}
+                <View style={[styles.sectionHeaderRow, { marginBottom: 10 }]}>
+                  <View>
+                    <Text style={styles.sectionSubtitle}>LİSTE SIRALAMASI</Text>
+                    <Text style={styles.sectionTitle}>En Popüler Parçalar</Text>
+                  </View>
+                  <Text style={styles.genreTrackCount}>
+                    {GENRE_CONFIG[selectedFilter].tracks.length} Parça
+                  </Text>
+                </View>
+
                 <View style={styles.trackList}>
-                  {displayedTopTracks.map((track, idx) => (
+                  {GENRE_CONFIG[selectedFilter].tracks.map((track, idx) => (
                     <TrackCard
-                      key={`home-top-${track.id}-${idx}`}
+                      key={`genre-${selectedFilter}-${track.id}-${idx}`}
                       rank={idx + 1}
                       track={track}
-                      onSelect={(t) => playTrack(t, displayedTopTracks)}
+                      onSelect={(t) => playTrack(t, GENRE_CONFIG[selectedFilter].tracks)}
                     />
                   ))}
                 </View>
-              ) : (
-                <View style={styles.emptyTopPlayedCard}>
-                  <Ionicons name="flame-outline" size={26} color="#FF9500" />
-                  <Text style={styles.emptyTopPlayedTitle}>Henüz Şarkı Çalmadın</Text>
-                  <Text style={styles.emptyTopPlayedSubtitle}>
-                    Müzik dinledikçe en çok dinlediğin şarkılar otomatik burada derlenecek!
-                  </Text>
-                </View>
-              )}
-            </View>
 
-            {/* 6. Günün Parçaları (Hızlı Seçimler) */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
-              <View>
-                <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
-                <Text style={styles.sectionTitle}>Günün Parçaları</Text>
+                {/* 3. Category Star Artists */}
+                {GENRE_CONFIG[selectedFilter].artists && GENRE_CONFIG[selectedFilter].artists.length > 0 && (
+                  <View style={{ marginTop: 20 }}>
+                    <View style={styles.sectionHeaderRow}>
+                      <View>
+                        <Text style={styles.sectionSubtitle}>TÜRÜN YILDIZLARI</Text>
+                        <Text style={styles.sectionTitle}>Popüler Sanatçılar</Text>
+                      </View>
+                    </View>
+
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 10 }}>
+                      {GENRE_CONFIG[selectedFilter].artists.map((artist) => (
+                        <TouchableOpacity
+                          key={artist.id}
+                          style={styles.genreArtistItem}
+                          activeOpacity={0.7}
+                          onPress={() => handleArtistSelect(artist.query)}
+                        >
+                          <Image source={{ uri: artist.image }} style={styles.genreArtistAvatar} />
+                          <Text style={styles.genreArtistName} numberOfLines={1}>{artist.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
-              <TouchableOpacity
-                onPress={() => setActiveTab('explore')}
-                style={styles.seeAllBtn}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-              >
-                <Text style={styles.seeAllText}>Tümü</Text>
-                <Ionicons name="chevron-forward" size={14} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
+            ) : (
+              /* ==================== STANDARD HOME VIEW (TÜMÜ) ==================== */
+              <>
+                {/* 4. 6-Pack Quick Shortcuts Grid (1-Tap Play) */}
+                <QuickMixGrid />
 
-            <View style={styles.trackList}>
-              {quickPicks.map((track) => (
-                <TrackCard
-                  key={track.id}
-                  track={track}
-                  onSelect={(t) => playTrack(t, quickPicks)}
-                />
-              ))}
-            </View>
+                {/* 5. 🔥 EN ÇOK DİNLENENLER DERLEMESİ (ANA SAYFA ÖZEL) */}
+                <View style={styles.topPlayedCompiledSection}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View>
+                      <Text style={styles.sectionSubtitle}>ZİRVEDEKİLER & TREND</Text>
+                      <Text style={styles.sectionTitle}>🔥 En Çok Dinlenenler</Text>
+                    </View>
 
-            {/* 7. Öne Çıkan Listeler & Mixler */}
-            <PlaylistsCarousel onSelectMix={handleMixSelect} />
+                    {/* Switch between user's most played & global top */}
+                    <View style={styles.miniPillToggle}>
+                      <TouchableOpacity
+                        style={[styles.miniToggleBtn, homeTopFilter === 'user' && styles.activeMiniToggleBtn]}
+                        onPress={() => setHomeTopFilter('user')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.miniToggleText, homeTopFilter === 'user' && styles.activeMiniToggleText]}>
+                          Senin ({mostPlayed.length})
+                        </Text>
+                      </TouchableOpacity>
 
-            {/* 8. Popüler Sanatçılar */}
-            <ArtistsRow onSelectArtist={handleArtistSelect} />
+                      <TouchableOpacity
+                        style={[styles.miniToggleBtn, homeTopFilter === 'global' && styles.activeMiniToggleBtn]}
+                        onPress={() => setHomeTopFilter('global')}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.miniToggleText, homeTopFilter === 'global' && styles.activeMiniToggleText]}>
+                          Top Liste
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {displayedTopTracks.length > 0 ? (
+                    <View style={styles.trackList}>
+                      {displayedTopTracks.map((track, idx) => (
+                        <TrackCard
+                          key={`home-top-${track.id}-${idx}`}
+                          rank={idx + 1}
+                          track={track}
+                          onSelect={(t) => playTrack(t, displayedTopTracks)}
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={styles.emptyTopPlayedCard}>
+                      <Ionicons name="flame-outline" size={26} color="#FF9500" />
+                      <Text style={styles.emptyTopPlayedTitle}>Henüz Şarkı Çalmadın</Text>
+                      <Text style={styles.emptyTopPlayedSubtitle}>
+                        Müzik dinledikçe en çok dinlediğin şarkılar otomatik burada derlenecek!
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* 6. Günün Parçaları (Hızlı Seçimler) */}
+                <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
+                  <View>
+                    <Text style={styles.sectionSubtitle}>SENİN İÇİN SEÇİLDİ</Text>
+                    <Text style={styles.sectionTitle}>Günün Parçaları</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setActiveTab('explore')}
+                    style={styles.seeAllBtn}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Text style={styles.seeAllText}>Tümü</Text>
+                    <Ionicons name="chevron-forward" size={14} color="#8E8E93" />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.trackList}>
+                  {quickPicks.map((track) => (
+                    <TrackCard
+                      key={track.id}
+                      track={track}
+                      onSelect={(t) => playTrack(t, quickPicks)}
+                    />
+                  ))}
+                </View>
+
+                {/* 7. Öne Çıkan Listeler & Mixler */}
+                <PlaylistsCarousel onSelectMix={handleMixSelect} />
+
+                {/* 8. Popüler Sanatçılar */}
+                <ArtistsRow onSelectArtist={handleArtistSelect} />
+              </>
+            )}
 
             <View style={{ height: 130 }} />
           </ScrollView>
@@ -931,5 +1046,79 @@ const styles = StyleSheet.create({
   activeNavLabel: {
     color: '#FF0000',
     fontWeight: 'bold',
+  },
+  genreShowcaseWrapper: {
+    paddingHorizontal: 16,
+    marginTop: 10,
+  },
+  genreHeroCard: {
+    backgroundColor: 'rgba(26, 26, 30, 0.95)',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    gap: 14,
+  },
+  genreHeroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  genreIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  genreHeroSubtitle: {
+    color: '#8E8E93',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  genreHeroTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  genrePlayAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    borderRadius: 14,
+  },
+  genrePlayAllBtnText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  genreTrackCount: {
+    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  genreArtistItem: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 72,
+  },
+  genreArtistAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#1E1E24',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  genreArtistName: {
+    color: '#EEEEEE',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 6,
+    textAlign: 'center',
   },
 });

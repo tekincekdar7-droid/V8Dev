@@ -83,12 +83,15 @@ const YouTubeAudioEngine = forwardRef(function YouTubeAudioEngine(
           modestbranding: true,
           rel: false,
           preventFullScreen: true,
+          playerVars: {
+            autoplay: 1,
+            playsinline: 1,
+          },
         }}
         webViewProps={{
           allowsInlineMediaPlayback: true,
           mediaPlaybackRequiresUserAction: false,
           allowsAirPlayForMediaPlayback: true,
-          androidLayerType: 'hardware',
         }}
       />
     </View>
@@ -100,10 +103,10 @@ export default YouTubeAudioEngine;
 const styles = StyleSheet.create({
   hiddenContainer: {
     position: 'absolute',
-    bottom: -100,
-    right: -100,
-    width: 50,
-    height: 50,
-    opacity: 0.8,
+    top: 0,
+    left: 0,
+    width: 2,
+    height: 2,
+    opacity: 0.02,
   },
 });
